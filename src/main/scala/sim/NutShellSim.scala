@@ -28,6 +28,7 @@ import device.AXI4RAM
 import nutcore._
 import utils.GTimer
 import difftest._
+import freechips.rocketchip.amba.AXI4RAM
 
 class SimTop extends Module {
   val io = IO(new Bundle{
@@ -38,19 +39,22 @@ class SimTop extends Module {
 
   lazy val config = NutCoreConfig(FPGAPlatform = false)
   val soc = Module(new NutShell()(config))
-  //val mem = Module(new AXI4RAM(memByte = 128 * 1024 * 1024, useBlackBox = true))
-  val mem = InModuleBody {
-    memAXI4SlaveNode.makeIOs()
-  }
+  //val mem = LazyModule(new AXI4RAM(memByte = 128 * 1024 * 1024, useBlackBox = true))
+  val mem = LazyModule(new AXI4RAM(address = AddressSet(0x80000000, 0x7ffffff)))     //128MB
+  /*val l_simAXIMem = LazyModule(new AXI4RAMWrapper(
+    soc.memAXI4SlaveNode, 128 * 1024 * 1024, useBlockBox = true
+  ))
+  val simAXIMem = Module(l_simAXIMem.module)*/
+  
   // Be careful with the commit checking of emu.
   // A large delay will make emu incorrectly report getting stuck.
-  val memdelay = Module(new AXI4Delayer(0))
+  //val memdelay = Module(new AXI4Delayer(0))
   val mmio = Module(new SimMMIO)
 
   soc.io.frontend <> mmio.io.dma
 
-  memdelay.io.in <> soc.io.mem
-  mem.io.in <> memdelay.io.out
+  memdelay.io.in <> soc.io.mem 
+  mem.node := TLDelayer(0) := memdelay.io.out
 
   mmio.io.rw <> soc.io.mmio
 

@@ -22,6 +22,12 @@ import bus.simplebus._
 import device.{AXI4CLINT, AXI4PLIC}
 import top.Settings
 
+import huancun.debug.TLLogger
+import huancun.{HCCacheParamsKey, HuanCun}
+import freechips.rocketchip.amba.axi4._ 
+import freechips.rocketchip.tilelink._ 
+import freechips.rocketchip.diplomacy.{AddressSet, LazyModule, LazyModuleImp}
+
 import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.BoringUtils
@@ -43,6 +49,9 @@ class ILABundle extends NutCoreBundle {
 
 class NutShell(implicit val p: NutCoreConfig) extends Module with HasSoCParameter extends LazyModule{
   val nutcore = LazyModule(new NutCore)
+  private val l2cache = LazyModule(new HuanCun())
+  val sb2axi = SimpleBus2AXI4Converter(true.B)
+  memAXI4SlaveNode := TLToAXI4() := l2cache.node := nutcore.dcache.clientNode
   lazy val module = new NutShellImp(this)
 }
 
@@ -57,11 +66,11 @@ class NutShellImp(outer: NutShell) extends LazyModuleImp(outer){
 
   val nutcore = outer.nutcore.module
 //  val cohMg = Module(new CoherenceManager)
-  val xbar = Module(new SimpleBusCrossbarNto1(2))
+  //val xbar = Module(new SimpleBusCrossbarNto1(2))
 //  cohMg.io.in <> nutcore.io.imem.mem
 //  nutcore.io.dmem.coh <> cohMg.io.out.coh
-  xbar.io.in(0) <> nutcore.io.imem.mem //cohMg.io.out.mem
-  xbar.io.in(1) <> nutcore.io.dmem.mem
+  //xbar.io.in(0) <> nutcore.io.imem.mem //cohMg.io.out.mem
+  //xbar.io.in(1) <> nutcore.io.dmem.mem
 
   val axi2sb = Module(new AXI42SimpleBusConverter())
   axi2sb.io.in <> io.frontend
@@ -72,7 +81,7 @@ class NutShellImp(outer: NutShell) extends LazyModuleImp(outer){
   memport.resp.valid := DontCare
   memport.req.ready := DontCare
 
-  val mem = if (HasL2cache) {
+  /*val mem = if (HasL2cache) {
     val l2cacheOut = Wire(new SimpleBusC)
     val l2cacheIn = if (HasPrefetch) {
       val prefetcher = Module(new Prefetcher)
@@ -91,20 +100,22 @@ class NutShellImp(outer: NutShell) extends LazyModuleImp(outer){
     l2cacheOut.mem
   } else {
     xbar.io.out
-  }
-
+  }*/
+  
   val memMapRegionBits = Settings.getInt("MemMapRegionBits")
   val memMapBase = Settings.getLong("MemMapBase")
   val memAddrMap = Module(new SimpleBusAddressMapper((memMapRegionBits, memMapBase)))
-  memAddrMap.io.in <> mem
+  //memAddrMap.io.in <> mem
+  memAddrMap.io.in <> nutcore.io.imem.mem
+  
   io.mem <> memAddrMap.io.out.toAXI4(true)
   
   nutcore.io.imem.coh.resp.ready := true.B
   nutcore.io.imem.coh.req.valid := false.B
   nutcore.io.imem.coh.req.bits := DontCare
-  nutcore.io.dmem.coh.resp.ready := true.B
+  /*nutcore.io.dmem.coh.resp.ready := true.B
   nutcore.io.dmem.coh.req.valid := false.B
-  nutcore.io.dmem.coh.req.bits := DontCare
+  nutcore.io.dmem.coh.req.bits := DontCare*/
 
   val addrSpace = List(
     (Settings.getLong("MMIOBase"), Settings.getLong("MMIOSize")), // external devices
