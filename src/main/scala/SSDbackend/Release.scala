@@ -1,12 +1,20 @@
 package SSDbackend
 
-import freechips.rocketchip.tilelink_
+import chisel3._
+import chisel3.util._
+import chisel3.util.experimental.BoringUtils
+import chisel3.experimental.IO
+import utils._
+import bus.simplebus._
+
+import freechips.rocketchip.tilelink._
 import freechips.rocketchip.tilelink.ClientMetadata
 import chipsalliance.rocketchip.config.Parameters
+import freechips.rocketchip.tilelink.MemoryOpCategories._
 
-class Release(edge: TLEdgeOut)(implicit p: Parameters) {
+class Release(edge: TLEdgeOut)(implicit val cacheConfig: DCacheConfig) extends DCacheModule {
   val io = IO(new Bundle {
-    val req = new SimpleBusReqBundle(userBits = userBits, idBits = idBits)
+    val req = Flipped(Decoupled(new SimpleBusReqBundle(userBits = userBits, idBits = idBits)))
     val release_ok = Output(Bool())
     val mem_release = Flipped(DecoupledIO(new TLBundleC(edge.bundle)))
     val mem_releaseAck = DecoupledIO(new TLBundleD(edge.bundle))
@@ -15,7 +23,7 @@ class Release(edge: TLEdgeOut)(implicit p: Parameters) {
     val dataReadBus = CacheDataArrayReadBus()
   })    
 
-  val req = io.req.bits.req
+  val req = io.req.bits
   val addr = req.addr.asTypeOf(addrBundle)
 
   //condition machine: release| releaseData| releaseAck
@@ -30,8 +38,9 @@ class Release(edge: TLEdgeOut)(implicit p: Parameters) {
   io.dataReadBus.apply(valid = (state === s_idle && io.req.valid) || state === s_releaseD,
     setIdx = Cat(addr.index, rCnt))
   val dataWay = io.dataReadBus.resp.data
-  val rData = Mux1H(waymask, dataWay).data
+  val rData = Mux1H(io.waymask, dataWay).data
 
+  val victimCoh = io.victimCoh
   val (release_has_dirty_data, release_shrink_param, release_new_coh) = victimCoh.onCacheControl(M_FLUSH)
 
   val idRel = 0.U(srcBits.W)
@@ -40,14 +49,14 @@ class Release(edge: TLEdgeOut)(implicit p: Parameters) {
     fromSource = idRel, 
     toAddress = req.addr, 
     lgSize = log2Ceil(LineSize).U, 
-    shrinkPermissions = release_shrink_param)
+    shrinkPermissions = release_shrink_param)._2
 
   val releaseData = edge.Release(
     fromSource = idRel, 
     toAddress = req.addr, 
     lgSize = log2Ceil(LineSize).U, 
     shrinkPermissions = release_shrink_param, 
-    data = rData)
+    data = rData)._2
 
   io.release_ok := false.B
 

@@ -47,7 +47,7 @@ class ILABundle extends NutCoreBundle {
   val InstrCnt = UInt(64.W)
 }
 
-class NutShell(implicit val p: NutCoreConfig) extends Module with HasSoCParameter extends LazyModule{
+class NutShell(implicit val p: NutCoreConfig) extends LazyModule with HasSoCParameter{
   val nutcore = LazyModule(new NutCore)
   private val l2cache = LazyModule(new HuanCun())
   val imem = LazyModule(new SB2AXI4MasterNode(true.B))

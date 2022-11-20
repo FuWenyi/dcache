@@ -27,11 +27,12 @@ import utils._
 import top.Settings
 import nutcore._
 
-import freechips.rocketchip.tilelink_
+import freechips.rocketchip.tilelink._
 import freechips.rocketchip.diplomacy.{IdRange, LazyModule, LazyModuleImp, TransferSizes}
 import freechips.rocketchip.tilelink.ClientMetadata
 import chipsalliance.rocketchip.config.Parameters
 import freechips.rocketchip.rocket.constants.MemoryOpConstants
+import freechips.rocketchip.tilelink.MemoryOpCategories._
 
 case class DCacheConfig (
                          ro: Boolean = false,
@@ -44,7 +45,7 @@ case class DCacheConfig (
                          srcBits: Int = 1
                        )
 
-sealed trait HasDCacheConst {
+trait HasDCacheConst {
   implicit val cacheConfig: DCacheConfig
 
   val PAddrBits: Int
@@ -53,6 +54,7 @@ sealed trait HasDCacheConst {
   val cacheName = cacheConfig.name
   val userBits = cacheConfig.userBits
   val idBits = cacheConfig.idBits
+  val srcBits = cacheConfig.srcBits
 
   val TotalSize = cacheConfig.totalSize
   val Ways = cacheConfig.ways
@@ -75,7 +77,7 @@ sealed trait HasDCacheConst {
   def CacheTagArrayReadBus() = new SRAMReadBus(new DTagBundle, set = Sets, way = Ways)
   def CacheDataArrayReadBus() = new SRAMReadBus(new DDataBundle, set = Sets * LineBeats, way = Ways)
   def CacheMetaArrayWriteBus() = new SRAMWriteBus(new DMetaBundle, set = Sets, way = Ways)
-  def CacheTagArrayWriteBus() = new SRAMWriteBus(new DtagBundle, set = Sets, way = Ways)
+  def CacheTagArrayWriteBus() = new SRAMWriteBus(new DTagBundle, set = Sets, way = Ways)
   def CacheDataArrayWriteBus() = new SRAMWriteBus(new DDataBundle, set = Sets * LineBeats, way = Ways)
 
   def getMetaIdx(addr: UInt) = addr.asTypeOf(addrBundle).index
@@ -85,10 +87,10 @@ sealed trait HasDCacheConst {
   def isSetConflict(a1: UInt, a2: UInt) = (a1.asTypeOf(addrBundle).index === a2.asTypeOf(addrBundle).index)
 }
 
-sealed abstract class DCacheBundle(implicit cacheConfig: DCacheConfig) extends Bundle with HasNutCoreParameter with HasDCacheConst
-sealed abstract class DCacheModule(implicit cacheConfig: DCacheConfig) extends Module with HasNutCoreParameter with HasDCacheConst with HasNutCoreLog
+abstract class DCacheBundle(implicit cacheConfig: DCacheConfig) extends Bundle with HasNutCoreParameter with HasDCacheConst
+abstract class DCacheModule(implicit cacheConfig: DCacheConfig) extends Module with HasNutCoreParameter with HasDCacheConst with HasNutCoreLog with MemoryOpConstants
 
-sealed class DTagBundle(implicit val cacheConfig: DCacheConfig) extends DCacheBundle {
+class DTagBundle(implicit val cacheConfig: DCacheConfig) extends DCacheBundle {
   val tag = Output(UInt(TagBits.W))
 
   def apply(tag: UInt) = {
@@ -97,16 +99,16 @@ sealed class DTagBundle(implicit val cacheConfig: DCacheConfig) extends DCacheBu
   }
 }
 
-sealed class DMetaBundle(implicit val cacheConfig: DCacheConfig) extends DCacheBundle {
+class DMetaBundle(implicit val cacheConfig: DCacheConfig) extends DCacheBundle {
   val coh = new ClientMetadata
 
-  def apply(coh: UInt) = {
-    this.coh := coh.asTypeOf(new ClientMetadata)
+  def apply(coh: ClientMetadata) = {
+    this.coh := coh
     this
   }
 }
 
-sealed class DDataBundle(implicit val cacheConfig: DCacheConfig) extends DCacheBundle {
+class DDataBundle(implicit val cacheConfig: DCacheConfig) extends DCacheBundle {
   val data = Output(UInt(DataBits.W))
 
   def apply(data: UInt) = {
@@ -119,7 +121,7 @@ class DCacheIO(implicit val cacheConfig: DCacheConfig) extends Bundle with HasNu
   val in = Flipped(new SimpleBusUC(userBits = userBits, idBits = idBits))
   val flush = Input(Bool())
   //val out = new SimpleBusC
-  val mmio = new SimpleBusUC
+  //val mmio = new SimpleBusUC
 }
 
 trait HasDCacheIO {
@@ -143,8 +145,8 @@ sealed class DCacheStage1(implicit val cacheConfig: DCacheConfig) extends DCache
   val io = IO(new SSDCacheStage1IO)
 
   val new_cmd = LookupTree(io.in.bits.cmd, List(
-    SimpleBusCmd.read   -> MemoryOpConstants.M_XRD,   //int load             
-    SimpleBusCmd.write  -> MemoryOpConstants.M_XWR    //int store
+    SimpleBusCmd.read   -> M_XRD,   //int load             
+    SimpleBusCmd.write  -> M_XWR    //int store
   ))
 
   // read meta array, tag array and data array
@@ -170,7 +172,7 @@ sealed class DCacheStage1(implicit val cacheConfig: DCacheConfig) extends DCache
 
 
 // check
-sealed class DCacheStage2(implicit val cacheConfig: DCacheConfig)(edge: TLEdgeOut) extends DCacheModule {
+sealed class DCacheStage2(edge: TLEdgeOut)(implicit val cacheConfig: DCacheConfig) extends DCacheModule {
   class SSDCacheStage2IO(edge: TLEdgeOut) extends Bundle {
     val in = Flipped(Decoupled(new DStage1IO))
     val out = Decoupled(new SimpleBusRespBundle(userBits = userBits, idBits = idBits))
@@ -197,7 +199,7 @@ sealed class DCacheStage2(implicit val cacheConfig: DCacheConfig)(edge: TLEdgeOu
   val tagWay = io.tagReadResp
   val req = io.in.bits.req
   val addr = req.addr.asTypeOf(addrBundle)
-  val hitVec = VecInit((tagWay zip metaWay).map(case(t, m) => m.asTypeOf(new ClientMetadata).isValid && (t === addr.tag))).asUInt
+  val hitVec = VecInit((tagWay zip metaWay).map{case (t, m) => (m.asTypeOf(new ClientMetadata).isValid() && (t === addr.tag))}).asUInt
   val hitTag = hitVec.orR && io.in.valid      //hit tag and meta not nothing
     //has hit tag: find its coh
   val coh = Mux(hitTag, Mux1H(hitVec, metaWay).asTypeOf(new ClientMetadata), ClientMetadata.onReset)
@@ -205,7 +207,6 @@ sealed class DCacheStage2(implicit val cacheConfig: DCacheConfig)(edge: TLEdgeOu
   val hit = hitTag && hitMeta && io.in.valid
     //miss need acquire and release(if not hitTag)
   val miss = !hit && io.in.valid
-  m.asTypeOf(new ClientMetadata).isValid
     
     //find victim
   val victimWaymask = 3.U //Set 3 as default
@@ -229,7 +230,7 @@ sealed class DCacheStage2(implicit val cacheConfig: DCacheConfig)(edge: TLEdgeOu
     //update meta
   val metaHitWriteBus = Wire(CacheMetaArrayWriteBus()).apply(
     valid = hit && needUpdateMeta, setIdx = getMetaIdx(req.addr), waymask = waymask,
-    coh = Wire(new DMetaBundle).apply(coh = hitNewCoh)
+    data = Wire(new DMetaBundle).apply(coh = hitNewCoh)
   )
 
     //cmd write: write data to cache
@@ -245,12 +246,12 @@ sealed class DCacheStage2(implicit val cacheConfig: DCacheConfig)(edge: TLEdgeOu
     //core modules: acquireAccess
   val acquireAccess = Module(new AcquireAccess(edge))
   acquireAccess.io.mem_getPutAcquire <> io.mem_getPutAcquire
-  acquireAccess.io.mem_grantAck <> mem_grantReleaseAck
+  acquireAccess.io.mem_grantAck <> io.mem_grantReleaseAck
   acquireAccess.io.mem_finish <> io.mem_finish
   acquireAccess.io.req := req
-  acquireAccess.io.req.valid := miss || (io.in.bits.isMMIO && io.in.valid)
-  acquireAccess.io.req.bits.wdata := Mux(hitTag, dataMasked, io.req.bits.wdata)
-  acquireAccess.io.isMMIO := io.in.bits.isMMIO
+  acquireAccess.io.req.valid := miss || (io.in.bits.mmio && io.in.valid)
+  acquireAccess.io.req.bits.wdata := Mux(hitTag, dataMasked, io.in.bits.req.wdata)
+  acquireAccess.io.isMMIO := io.in.bits.mmio
   acquireAccess.io.waymask := waymask
   acquireAccess.io.hitTag := hitTag
   acquireAccess.io.cohOld := coh
@@ -283,7 +284,7 @@ sealed class DCacheStage2(implicit val cacheConfig: DCacheConfig)(edge: TLEdgeOu
   
   release.io.req := req
   release.io.req.valid := needRel     //choose victim
-  release.io.req.addr := vicAddr
+  release.io.req.bits.addr := vicAddr
   release.io.mem_release <> io.mem_release
   release.io.mem_releaseAck <> io.mem_grantReleaseAck
   release.io.victimCoh := victimCoh
@@ -303,7 +304,7 @@ sealed class DCacheStage2(implicit val cacheConfig: DCacheConfig)(edge: TLEdgeOu
 
 }
 
-class DCache(implicit val cacheConfig: DCacheConfig) extends DCacheModule extends LazyModule{
+class DCache(implicit val cacheConfig: DCacheConfig) extends LazyModule with HasNutCoreParameter with HasDCacheConst with HasNutCoreLog{
   
   val clientParameters = TLMasterPortParameters.v1(
     Seq(TLMasterParameters.v1(
@@ -320,7 +321,7 @@ class DCache(implicit val cacheConfig: DCacheConfig) extends DCacheModule extend
   lazy val module = new DCacheImp(this)
 }
 
-class DCacheImp(outer: DCache) extends DCacheModule extends LazyModuleImp(outer) with HasDCacheIO { 
+class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheIO with HasNutCoreParameter with HasDCacheConst with HasNutCoreLog{ 
 
   val (bus, edge) = outer.clientNode.out.head
   // cache pipeline
@@ -351,15 +352,15 @@ class DCacheImp(outer: DCache) extends DCacheModule extends LazyModuleImp(outer)
   //probe.mem_probe <> bus.b
   //probe.mem_probeAck <> bus.c
   
-  val channelCArb = Module(new channelCArb(edge))
+  //val channelCArb = Module(new channelCArb(edge))
   //channelCArb.io.in(0) <> probe.mem_probeAck
-  channelCArb.io.in(1) <> s2.io.mem_release
+  //channelCArb.io.in(1) <> s2.io.mem_release
 
   PipelineConnect(s1.io.out, s2.io.in, s2.io.out.fire(), io.flush)
 
   io.in.resp <> s2.io.out
   s2.io.flush := io.flush
-  io.mmio <> s2.io.mmio
+  //io.mmio <> s2.io.mmio
 
   metaArray.io.r(0) <> s1.io.metaReadBus
   //metaArray.io.r(1) <> probe.io.metaReadBus

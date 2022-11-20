@@ -27,9 +27,6 @@ import utils._
 import top.Settings
 import nutcore._
 
-import freechips.rocketchip.tilelink_
-import freechips.rocketchip.diplomacy.{IdRange, LazyModule, LazyModuleImp, TransferSizes}
-
 case class SSDCacheConfig (
                          ro: Boolean = false,
                          name: String = "cache",
@@ -402,32 +399,13 @@ sealed class SSDCacheStage2(implicit val cacheConfig: SSDCacheConfig) extends Ca
 
 }
 
-class SSDCache(implicit val cacheConfig: SSDCacheConfig) extends CacheModule extends LazyModule{
-  
-  val clientParameters = TLMasterPortParameters.v1(
-    Seq(TLMasterParameters.v1(
-      name = "dcache",
-      sourceId = IdRange(0, 1),
-      supportsProbe = LineSize
-    )),
-    requestFields = ,
-    echoFields = 
-  )
-
-  val clientNode = TLClientNode(Seq(clientParameters))
-
-  lazy val module = new SSDCacheImp(this)
-}
-
-class SSDCacheImp(outer: SSDCache) extends CacheModule extends LazyModuleImp(outer) with HasSSDCacheIO { 
-
-  val (bus, edge) = outer.clientNode.out.head
+class SSDCache(implicit val cacheConfig: SSDCacheConfig) extends CacheModule with HasSSDCacheIO {
   // cache pipeline
   val s1 = Module(new SSDCacheStage1)
   val s2 = Module(new SSDCacheStage2)
 
   val metaArray = Module(new MetaSRAMTemplateWithArbiter(nRead = 1, new MetaBundle, set = Sets, way = Ways, shouldReset = true))
-  val dataArray = Module(new SRAMTemplateWithArbiter(nRead = 2, new DataBundle, set = Sets * LineBeats, way = Ways))
+  val dataArray = Module(new ysyxSRAMTemplateWithArbiter(nRead = 2, new DataBundle, set = Sets * LineBeats, way = Ways))
 //  val metaArray = Module(new MetaSRAMTemplateWithArbiter(nRead = 1, new MetaBundle, set = Sets, way = Ways, shouldReset = true))
 //  val dataArray = Module(new DataSRAMTemplateWithArbiter(nRead = 2, new DataBundle, set = Sets * LineBeats, way = Ways))
 
@@ -464,7 +442,7 @@ class SSDCacheImp(outer: SSDCache) extends CacheModule extends LazyModuleImp(out
 }
 
 
-/*object SSDCache {
+object SSDCache {
   def apply(in: SimpleBusUC, mmio: SimpleBusUC, flush: Bool)(implicit cacheConfig: SSDCacheConfig) = {
     val cache = Module(new SSDCache)
 
@@ -473,4 +451,4 @@ class SSDCacheImp(outer: SSDCache) extends CacheModule extends LazyModuleImp(out
     mmio <> cache.io.mmio
     cache.io.out
   }
-}*/
+}

@@ -1,23 +1,30 @@
 package SSDbackend
 
-import freechips.rocketchip.tilelink_
+import chisel3._
+import chisel3.util._
+import chisel3.util.experimental.BoringUtils
+import chisel3.experimental.IO
+import utils._
+import bus.simplebus._
+
+import freechips.rocketchip.tilelink._
 import freechips.rocketchip.tilelink.ClientMetadata
 import chipsalliance.rocketchip.config.Parameters
 
-class ProbeReq(implicit p: Parameters) {
+class ProbeReq(implicit val cacheConfig: DCacheConfig) extends DCacheBundle{
   val opcode = UInt()
   val param  = UInt(TLPermissions.bdWidth.W)
   val source = UInt()
   val addr   = UInt(PAddrBits.W)
   val needData = Bool()
 
-  def dump() = {
-    XSDebug("ProbeReq source: %d opcode: %d addr: %x param: %d\n",
+  /*def dump() = {
+    Debug("ProbeReq source: %d opcode: %d addr: %x param: %d\n",
       source, opcode, addr, param)
-  }
+  }*/
 }
 
-class Probe(edge: TLEdgeOut)(implicit p: Parameters) {
+class Probe(edge: TLEdgeOut)(implicit val cacheConfig: DCacheConfig) extends DCacheModule {
   val io = IO(new Bundle {
     val mem_probe = Flipped(DecoupledIO(new TLBundleB(edge.bundle)))
     val mem_probeAck = DecoupledIO(new TLBundleC(edge.bundle))
@@ -28,7 +35,7 @@ class Probe(edge: TLEdgeOut)(implicit p: Parameters) {
   })
 
   // translate to inner req
-  val req = Wire(new ProbeReq)
+  val req = new ProbeReq
   req.source := io.mem_probe.bits.source
   req.opcode := io.mem_probe.bits.opcode
   req.addr := io.mem_probe.bits.address
@@ -36,7 +43,7 @@ class Probe(edge: TLEdgeOut)(implicit p: Parameters) {
   req.needData := io.mem_probe.bits.data(0)
 
   //reg for req
-  val reqReg = RegEnable(req, io.mem_probe.fire())
+  val reqReg = RegEnable(req.asUInt, io.mem_probe.fire()).asTypeOf(new ProbeReq)
   val addr = reqReg.addr.asTypeOf(addrBundle)
 
   //condition machine: s_probePerm|s_probeAck|s_probeBlock|s_probeAckData|   
@@ -53,19 +60,20 @@ class Probe(edge: TLEdgeOut)(implicit p: Parameters) {
   io.dataReadBus.apply(valid = state === s_probeB || state === s_probeAD,
     setIdx = Cat(addr.index, count))
 
-  val metaWay = metaReadBus.resp.data 
-  val tagWay = tagReadBus.resp.data
+  val metaWay = io.metaReadBus.resp.data 
+  val tagWay = io.tagReadBus.resp.data
 
   //hit and select coh
   val waymask = VecInit(tagWay.map(t => (t.tag === addr.tag))).asUInt
   val coh = Mux1H(waymask, metaWay).asTypeOf(new ClientMetadata)
   val (probe_has_dirty_data, probe_shrink_param, probe_new_coh) = coh.onProbe(req.param)
-  val dataRead = Mux1H(waymask, io.dataReadBus.resp).data
+  val dataRead = Mux1H(waymask, io.dataReadBus.resp.data).data
 
-  io.metaWriteBus.req = Wire(CacheMetaArrayWriteBus()).apply(
+  val metaWriteBus = Wire(CacheMetaArrayWriteBus()).apply(
     valid = state === s_probeB || state === s_probeP, setIdx = addr.index, waymask = waymask,
-    data = Wire(new DMetaBundle).apply(meta = probe_new_coh)
+    data = Wire(new DMetaBundle).apply(coh = probe_new_coh)
   )
+  io.metaWriteBus.req <> metaWriteBus.req
 
   io.mem_probe.ready := Mux(state === s_idle, true.B, false.B) 
   io.mem_probeAck.valid := Mux(state === s_probeA || state === s_probeAD, true.B, false.B)
@@ -74,14 +82,14 @@ class Probe(edge: TLEdgeOut)(implicit p: Parameters) {
     fromSource = reqReg.source,
     toAddress = reqReg.addr,
     lgSize = log2Ceil(LineSize).U,
-    reportPermissions = probe_new_coh
+    reportPermissions = probe_shrink_param
   )
 
   val probeResponseData = edge.ProbeAck(
     fromSource = reqReg.source,
     toAddress = reqReg.addr,
     lgSize = log2Ceil(LineSize).U,
-    reportPermissions = probe_new_coh,
+    reportPermissions = probe_shrink_param,
     data = dataRead
   )
 

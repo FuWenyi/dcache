@@ -91,14 +91,14 @@ object AddressSpace extends HasNutCoreParameter {
   }).reduce(_ || _)
 }
 
-class NutCore(implicit val p: NutCoreConfig) extends NutCoreModule extends LazyModule{
+class NutCore(implicit val p: NutCoreConfig) extends LazyModule with HasNutCoreParameter with HasNutCoreConst with HasExceptionNO with HasBackendConst with HasNutCoreLog{
 
   val dcache = LazyModule(new DCache())
   
   lazy val module = new NutCoreImp(this)
 }
 
-class NutCoreImp(outer: NutCore) extends NutCoreModule extends LazyModuleImp(outer){
+class NutCoreImp(outer: NutCore) extends LazyModuleImp(outer) with HasNutCoreParameter with HasNutCoreConst with HasExceptionNO with HasBackendConst with HasNutCoreLog{
   class NutCoreIO extends Bundle {
     val imem = new SimpleBusC
     //val dmem = new SimpleBusC
