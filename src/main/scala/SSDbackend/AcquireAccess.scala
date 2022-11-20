@@ -44,7 +44,7 @@ class AcquireAccess(edge: TLEdgeOut)(implicit p: Parameters) {
   val metaWrValid = (state === s_grant || (state === s_grantD && grant_first)) && isGrant && io.mem_grantAck.fire()
   val metaWriteBus = Wire(CacheMetaArrayWriteBus()).apply(
     valid = metaWrValid , setIdx = addr.index, waymask = io.waymask,
-    coh = Wire(new MetaBundle).apply(coh = newCoh)
+    coh = Wire(new DMetaBundle).apply(coh = newCoh)
   )
   io.metaWriteBus.req <> metaWriteBus.req
 
@@ -54,14 +54,14 @@ class AcquireAccess(edge: TLEdgeOut)(implicit p: Parameters) {
   val wdata = Mux(state === s_grant, req.wdata, dataRefill)
   val wordIndex = Mux(state === s_grant, addr.wordIndex, grant_count)
   val dataWriteBus = Wire(CacheDataArrayWriteBus()).apply(
-    data = Wire(new DataBundle).apply(wdata),
+    data = Wire(new DDataBundle).apply(wdata),
     valid = dataWrValid, setIdx = Cat(addr.index, wordIndex), waymask = waymask)
   io.dataWriteBus.req <> dataWriteBus.req
 
   val tagWrValid = state === s_grantD && isGrant && grant_first && io.mem_grantAck.fire()
   val tagWriteBus = Wire(CacheTagArrayWriteBus()).apply(
     valid = tagWrValid, setIdx = addr.index, waymask = io.waymask,
-    tag = Wire(new TagBundle).apply(tag = addr.tag)
+    tag = Wire(new DTagBundle).apply(tag = addr.tag)
   )
   io.tagWriteBus.req <> tagWriteBus.req
 

@@ -144,7 +144,7 @@ class AXI42SimpleBusConverter() extends Module {
 }
 
 
-/*class SimpleBus2AXI4Converter[OT <: AXI4Lite](outType: OT, isFromCache: Boolean) extends Module {
+class SimpleBus2AXI4Converter[OT <: AXI4Lite](outType: OT, isFromCache: Boolean) extends Module {
   val io = IO(new Bundle {
     val in = Flipped(new SimpleBusUC)
     val out = Flipped(Flipped(outType))
@@ -207,9 +207,9 @@ object SimpleBus2AXI4Converter {
     bridge.io.in <> in
     bridge.io.out
   }
-}*/
+}
 
-class SimpleBus2AXI4Converter(isFromCache: Boolean) extends Module {
+class SB2AXI4MasterNode(isFromCache: Boolean) extends Module {
   val node = AXISMasterNode(
     AXI4MasterPortParameters(
       masters = Seq(
@@ -280,12 +280,4 @@ class SimpleBus2AXI4Converter(isFromCache: Boolean) extends Module {
     mem.resp.valid  := Mux(wen, axi.b.valid, axi.r.valid)
   }
 
-}
-
-object SimpleBus2AXI4Converter {
-  def apply(in: SimpleBusUC, isFromCache: Boolean = false): OT = {
-    val bridge = LazyModule(new SimpleBus2AXI4Converter(isFromCache))
-    bridge.io.in <> in
-    bridge
-  }
 }

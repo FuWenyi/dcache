@@ -24,11 +24,14 @@ import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 
 import bus.axi4._
-import device.AXI4RAM
+//import device.AXI4RAM
 import nutcore._
 import utils.GTimer
 import difftest._
 import freechips.rocketchip.amba.AXI4RAM
+import freechips.rocketchip.amba.AXI4Xbar
+import freechips.rocketchip.tilelink._
+import freechips.rocketchip.diplomacy.{AddressSet, LazyModule, LazyModuleImp}
 
 class SimTop extends Module {
   val io = IO(new Bundle{
@@ -41,6 +44,10 @@ class SimTop extends Module {
   val soc = Module(new NutShell()(config))
   //val mem = LazyModule(new AXI4RAM(memByte = 128 * 1024 * 1024, useBlackBox = true))
   val mem = LazyModule(new AXI4RAM(address = AddressSet(0x80000000, 0x7ffffff)))     //128MB
+  
+  val xbar = AXI4Xbar()
+  xbar := TLToAXI4() := soc.l2cache.node := soc.nutcore.dcache.clientNode
+  xbar := soc.imem.node
   /*val l_simAXIMem = LazyModule(new AXI4RAMWrapper(
     soc.memAXI4SlaveNode, 128 * 1024 * 1024, useBlockBox = true
   ))
@@ -53,8 +60,8 @@ class SimTop extends Module {
 
   soc.io.frontend <> mmio.io.dma
 
-  memdelay.io.in <> soc.io.mem 
-  mem.node := TLDelayer(0) := memdelay.io.out
+  //memdelay.io.in <> soc.io.mem 
+  mem.node := TLDelayer(0) := xbar
 
   mmio.io.rw <> soc.io.mmio
 

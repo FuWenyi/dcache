@@ -26,7 +26,7 @@ import huancun.debug.TLLogger
 import huancun.{HCCacheParamsKey, HuanCun}
 import freechips.rocketchip.amba.axi4._ 
 import freechips.rocketchip.tilelink._ 
-import freechips.rocketchip.diplomacy.{AddressSet, LazyModule, LazyModuleImp}
+//import freechips.rocketchip.diplomacy.{AddressSet, LazyModule, LazyModuleImp}
 
 import chisel3._
 import chisel3.util._
@@ -50,14 +50,14 @@ class ILABundle extends NutCoreBundle {
 class NutShell(implicit val p: NutCoreConfig) extends Module with HasSoCParameter extends LazyModule{
   val nutcore = LazyModule(new NutCore)
   private val l2cache = LazyModule(new HuanCun())
-  val sb2axi = SimpleBus2AXI4Converter(true.B)
+  val imem = LazyModule(new SB2AXI4MasterNode(true.B))
   memAXI4SlaveNode := TLToAXI4() := l2cache.node := nutcore.dcache.clientNode
   lazy val module = new NutShellImp(this)
 }
 
 class NutShellImp(outer: NutShell) extends LazyModuleImp(outer){
   val io = IO(new Bundle{
-    val mem = new AXI4
+    //val mem = new AXI4
     val mmio = (if (p.FPGAPlatform) { new AXI4 } else { new SimpleBusUC })
     val frontend = Flipped(new AXI4)
     val meip = Input(UInt(Settings.getInt("NrExtIntr").W))
@@ -65,6 +65,7 @@ class NutShellImp(outer: NutShell) extends LazyModuleImp(outer){
   })
 
   val nutcore = outer.nutcore.module
+  val imem = outer.imem.module
 //  val cohMg = Module(new CoherenceManager)
   //val xbar = Module(new SimpleBusCrossbarNto1(2))
 //  cohMg.io.in <> nutcore.io.imem.mem
@@ -108,8 +109,9 @@ class NutShellImp(outer: NutShell) extends LazyModuleImp(outer){
   //memAddrMap.io.in <> mem
   memAddrMap.io.in <> nutcore.io.imem.mem
   
-  io.mem <> memAddrMap.io.out.toAXI4(true)
-  
+  //io.mem <> memAddrMap.io.out.toAXI4(true)
+  imem.io.in <> memAddrMap.io.out.toAXI4(true)
+
   nutcore.io.imem.coh.resp.ready := true.B
   nutcore.io.imem.coh.req.valid := false.B
   nutcore.io.imem.coh.req.bits := DontCare

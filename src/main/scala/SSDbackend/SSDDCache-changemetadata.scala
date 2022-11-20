@@ -33,9 +33,9 @@ import freechips.rocketchip.tilelink.ClientMetadata
 import chipsalliance.rocketchip.config.Parameters
 import freechips.rocketchip.rocket.constants.MemoryOpConstants
 
-case class SSDCacheConfig (
+case class DCacheConfig (
                          ro: Boolean = false,
-                         name: String = "cache",
+                         name: String = "dcache",
                          userBits: Int = 0,
                          idBits: Int = 0,
 
@@ -44,8 +44,8 @@ case class SSDCacheConfig (
                          srcBits: Int = 1
                        )
 
-sealed trait HasCacheConst {
-  implicit val cacheConfig: SSDCacheConfig
+sealed trait HasDCacheConst {
+  implicit val cacheConfig: DCacheConfig
 
   val PAddrBits: Int
   val XLEN: Int
@@ -71,12 +71,12 @@ sealed trait HasCacheConst {
     val byteOffset = UInt((if (XLEN == 64) 3 else 2).W)
   }
 
-  def CacheMetaArrayReadBus() = new SRAMReadBus(new MetaBundle, set = Sets, way = Ways)
-  def CacheTagArrayReadBus() = new SRAMReadBus(new TagBundle, set = Sets, way = Ways)
-  def CacheDataArrayReadBus() = new SRAMReadBus(new DataBundle, set = Sets * LineBeats, way = Ways)
-  def CacheMetaArrayWriteBus() = new SRAMWriteBus(new MetaBundle, set = Sets, way = Ways)
-  def CacheTagArrayWriteBus() = new SRAMWriteBus(new MetaBundle, set = Sets, way = Ways)
-  def CacheDataArrayWriteBus() = new SRAMWriteBus(new DataBundle, set = Sets * LineBeats, way = Ways)
+  def CacheMetaArrayReadBus() = new SRAMReadBus(new DMetaBundle, set = Sets, way = Ways)
+  def CacheTagArrayReadBus() = new SRAMReadBus(new DTagBundle, set = Sets, way = Ways)
+  def CacheDataArrayReadBus() = new SRAMReadBus(new DDataBundle, set = Sets * LineBeats, way = Ways)
+  def CacheMetaArrayWriteBus() = new SRAMWriteBus(new DMetaBundle, set = Sets, way = Ways)
+  def CacheTagArrayWriteBus() = new SRAMWriteBus(new DtagBundle, set = Sets, way = Ways)
+  def CacheDataArrayWriteBus() = new SRAMWriteBus(new DDataBundle, set = Sets * LineBeats, way = Ways)
 
   def getMetaIdx(addr: UInt) = addr.asTypeOf(addrBundle).index
   def getDataIdx(addr: UInt) = Cat(addr.asTypeOf(addrBundle).index, addr.asTypeOf(addrBundle).wordIndex)
@@ -85,10 +85,10 @@ sealed trait HasCacheConst {
   def isSetConflict(a1: UInt, a2: UInt) = (a1.asTypeOf(addrBundle).index === a2.asTypeOf(addrBundle).index)
 }
 
-sealed abstract class CacheBundle(implicit cacheConfig: SSDCacheConfig) extends Bundle with HasNutCoreParameter with HasCacheConst
-sealed abstract class CacheModule(implicit cacheConfig: SSDCacheConfig) extends Module with HasNutCoreParameter with HasCacheConst with HasNutCoreLog
+sealed abstract class DCacheBundle(implicit cacheConfig: DCacheConfig) extends Bundle with HasNutCoreParameter with HasDCacheConst
+sealed abstract class DCacheModule(implicit cacheConfig: DCacheConfig) extends Module with HasNutCoreParameter with HasDCacheConst with HasNutCoreLog
 
-sealed class TagBundle(implicit val cacheConfig: SSDCacheConfig) extends CacheBundle {
+sealed class DTagBundle(implicit val cacheConfig: DCacheConfig) extends DCacheBundle {
   val tag = Output(UInt(TagBits.W))
 
   def apply(tag: UInt) = {
@@ -97,7 +97,7 @@ sealed class TagBundle(implicit val cacheConfig: SSDCacheConfig) extends CacheBu
   }
 }
 
-sealed class MetaBundle(implicit val cacheConfig: SSDCacheConfig) extends CacheBundle {
+sealed class DMetaBundle(implicit val cacheConfig: DCacheConfig) extends DCacheBundle {
   val coh = new ClientMetadata
 
   def apply(coh: UInt) = {
@@ -106,7 +106,7 @@ sealed class MetaBundle(implicit val cacheConfig: SSDCacheConfig) extends CacheB
   }
 }
 
-sealed class DataBundle(implicit val cacheConfig: SSDCacheConfig) extends CacheBundle {
+sealed class DDataBundle(implicit val cacheConfig: DCacheConfig) extends DCacheBundle {
   val data = Output(UInt(DataBits.W))
 
   def apply(data: UInt) = {
@@ -115,27 +115,27 @@ sealed class DataBundle(implicit val cacheConfig: SSDCacheConfig) extends CacheB
   }
 }
 
-class SSDCacheIO(implicit val cacheConfig: SSDCacheConfig) extends Bundle with HasNutCoreParameter with HasCacheConst {
+class DCacheIO(implicit val cacheConfig: DCacheConfig) extends Bundle with HasNutCoreParameter with HasDCacheConst {
   val in = Flipped(new SimpleBusUC(userBits = userBits, idBits = idBits))
   val flush = Input(Bool())
   //val out = new SimpleBusC
   val mmio = new SimpleBusUC
 }
 
-trait HasSSDCacheIO {
-  implicit val cacheConfig: SSDCacheConfig
-  val io = IO(new SSDCacheIO)
+trait HasDCacheIO {
+  implicit val cacheConfig: DCacheConfig
+  val io = IO(new DCacheIO)
 }
 
-sealed class SSDStage1IO(implicit val cacheConfig: SSDCacheConfig) extends CacheBundle {
+sealed class DStage1IO(implicit val cacheConfig: DCacheConfig) extends DCacheBundle {
   val req = new SimpleBusReqBundle(userBits = userBits, idBits = idBits)
   val mmio = Output(Bool())
 }
 // meta read
-sealed class SSDCacheStage1(implicit val cacheConfig: SSDCacheConfig) extends CacheModule {
+sealed class DCacheStage1(implicit val cacheConfig: DCacheConfig) extends DCacheModule {
   class SSDCacheStage1IO extends Bundle {
     val in = Flipped(Decoupled(new SimpleBusReqBundle(userBits = userBits, idBits = idBits)))
-    val out = Decoupled(new SSDStage1IO)
+    val out = Decoupled(new DStage1IO)
     val metaReadBus = CacheMetaArrayReadBus()
     val dataReadBus = CacheDataArrayReadBus()
     val tagReadBus = CacheTagArrayReadBus()
@@ -170,14 +170,14 @@ sealed class SSDCacheStage1(implicit val cacheConfig: SSDCacheConfig) extends Ca
 
 
 // check
-sealed class SSDCacheStage2(implicit val cacheConfig: SSDCacheConfig)(edge: TLEdgeOut) extends CacheModule {
+sealed class DCacheStage2(implicit val cacheConfig: DCacheConfig)(edge: TLEdgeOut) extends DCacheModule {
   class SSDCacheStage2IO(edge: TLEdgeOut) extends Bundle {
-    val in = Flipped(Decoupled(new SSDStage1IO))
+    val in = Flipped(Decoupled(new DStage1IO))
     val out = Decoupled(new SimpleBusRespBundle(userBits = userBits, idBits = idBits))
     val flush = Input(Bool())
-    val metaReadResp = Flipped(Vec(Ways, new MetaBundle))
-    val tagReadResp = Flipped(Vec(Ways, new TagBundle))
-    val dataReadResp = Flipped(Vec(Ways, new DataBundle))
+    val metaReadResp = Flipped(Vec(Ways, new DMetaBundle))
+    val tagReadResp = Flipped(Vec(Ways, new DTagBundle))
+    val dataReadResp = Flipped(Vec(Ways, new DDataBundle))
 
     val dataReadBus = CacheDataArrayReadBus()
     val metaWriteBus = CacheMetaArrayWriteBus()
@@ -229,14 +229,14 @@ sealed class SSDCacheStage2(implicit val cacheConfig: SSDCacheConfig)(edge: TLEd
     //update meta
   val metaHitWriteBus = Wire(CacheMetaArrayWriteBus()).apply(
     valid = hit && needUpdateMeta, setIdx = getMetaIdx(req.addr), waymask = waymask,
-    coh = Wire(new MetaBundle).apply(coh = hitNewCoh)
+    coh = Wire(new DMetaBundle).apply(coh = hitNewCoh)
   )
 
     //cmd write: write data to cache
   val dataRead = Mux1H(waymask, io.dataReadResp).data
   val dataMasked = MaskData(dataRead, req.wdata, wordMask)
   val dataHitWriteBus = Wire(CacheDataArrayWriteBus()).apply(
-    data = Wire(new DataBundle).apply(dataMasked),
+    data = Wire(new DDataBundle).apply(dataMasked),
     valid = hitWrite, setIdx = Cat(addr.index, addr.wordIndex), waymask = waymask)
   
   //if miss
@@ -303,7 +303,7 @@ sealed class SSDCacheStage2(implicit val cacheConfig: SSDCacheConfig)(edge: TLEd
 
 }
 
-class SSDCache(implicit val cacheConfig: SSDCacheConfig) extends CacheModule extends LazyModule{
+class DCache(implicit val cacheConfig: DCacheConfig) extends DCacheModule extends LazyModule{
   
   val clientParameters = TLMasterPortParameters.v1(
     Seq(TLMasterParameters.v1(
@@ -317,23 +317,23 @@ class SSDCache(implicit val cacheConfig: SSDCacheConfig) extends CacheModule ext
 
   val clientNode = TLClientNode(Seq(clientParameters))
 
-  lazy val module = new SSDCacheImp(this)
+  lazy val module = new DCacheImp(this)
 }
 
-class SSDCacheImp(outer: SSDCache) extends CacheModule extends LazyModuleImp(outer) with HasSSDCacheIO { 
+class DCacheImp(outer: DCache) extends DCacheModule extends LazyModuleImp(outer) with HasDCacheIO { 
 
   val (bus, edge) = outer.clientNode.out.head
   // cache pipeline
-  val s1 = Module(new SSDCacheStage1)
-  val s2 = Module(new SSDCacheStage2(edge))
+  val s1 = Module(new DCacheStage1)
+  val s2 = Module(new DCacheStage2(edge))
 
   //core modules
-  val probe = Module(new Probe(edge))
+  //val probe = Module(new Probe(edge))
 
   //meta 
-  val tagArray = Module(new MetaSRAMTemplateWithArbiter(nRead = 2, new TagBundle, set = Sets, way = Ways, shouldReset = true))
-  val metaArray = Module(new MetaSRAMTemplateWithArbiter(nRead = 2, new MetaBundle, set = Sets, way = Ways, shouldReset = true))
-  val dataArray = Module(new SRAMTemplateWithArbiter(nRead = 3, new DataBundle, set = Sets * LineBeats, way = Ways))
+  val tagArray = Module(new MetaSRAMTemplateWithArbiter(nRead = 2, new DTagBundle, set = Sets, way = Ways, shouldReset = true))
+  val metaArray = Module(new MetaSRAMTemplateWithArbiter(nRead = 2, new DMetaBundle, set = Sets, way = Ways, shouldReset = true))
+  val dataArray = Module(new SRAMTemplateWithArbiter(nRead = 3, new DDataBundle, set = Sets * LineBeats, way = Ways))
 //  val metaArray = Module(new MetaSRAMTemplateWithArbiter(nRead = 1, new MetaBundle, set = Sets, way = Ways, shouldReset = true))
 //  val dataArray = Module(new DataSRAMTemplateWithArbiter(nRead = 2, new DataBundle, set = Sets * LineBeats, way = Ways))
 
@@ -348,11 +348,11 @@ class SSDCacheImp(outer: SSDCache) extends CacheModule extends LazyModuleImp(out
   s2.io.mem_grantReleaseAck <> bus.d 
   s2.io.mem_finish <> bus.e 
   
-  probe.mem_probe <> bus.b
-  probe.mem_probeAck <> bus.c
+  //probe.mem_probe <> bus.b
+  //probe.mem_probeAck <> bus.c
   
   val channelCArb = Module(new channelCArb(edge))
-  channelCArb.io.in(0) <> probe.mem_probeAck
+  //channelCArb.io.in(0) <> probe.mem_probeAck
   channelCArb.io.in(1) <> s2.io.mem_release
 
   PipelineConnect(s1.io.out, s2.io.in, s2.io.out.fire(), io.flush)
@@ -362,19 +362,19 @@ class SSDCacheImp(outer: SSDCache) extends CacheModule extends LazyModuleImp(out
   io.mmio <> s2.io.mmio
 
   metaArray.io.r(0) <> s1.io.metaReadBus
-  metaArray.io.r(1) <> probe.io.metaReadBus
+  //metaArray.io.r(1) <> probe.io.metaReadBus
   dataArray.io.r(0) <> s1.io.dataReadBus
   dataArray.io.r(1) <> s2.io.dataReadBus
-  dataArray.io.r(2) <> probe.io.dataReadBus
+  //dataArray.io.r(2) <> probe.io.dataReadBus
   tagArray.io.r(0) <> s1.io.tagReadBus
-  tagArray.io.r(1) <> probe.io.tagReadBus
+  //tagArray.io.r(1) <> probe.io.tagReadBus
 
   val metaWriteArb = Module(new Arbiter(CacheMetaArrayWriteBus().req.bits, 2))
   val dataWriteArb = Module(new Arbiter(CacheDataArrayWriteBus().req.bits, 2))
   metaWriteArb.io.in(0) <> s2.io.metaWriteBus
-  metaWriteArb.io.in(1) <> probe.io.metaWriteBus
+  //metaWriteArb.io.in(1) <> probe.io.metaWriteBus
   metaArray.io.w <> metaWriteArb.io.out
-  dataWriteArb.io.in(0) <> probe.io.dataWriteBus
+  //dataWriteArb.io.in(0) <> probe.io.dataWriteBus
   dataWriteArb.io.in(1) <> s2.io.dataWriteBus
   dataArray.io.w <> dataWriteArb.io.out
   tagArray.io.w <> s2.io.tagWriteBus

@@ -64,7 +64,7 @@ class Probe(edge: TLEdgeOut)(implicit p: Parameters) {
 
   io.metaWriteBus.req = Wire(CacheMetaArrayWriteBus()).apply(
     valid = state === s_probeB || state === s_probeP, setIdx = addr.index, waymask = waymask,
-    data = Wire(new MetaBundle).apply(meta = probe_new_coh)
+    data = Wire(new DMetaBundle).apply(meta = probe_new_coh)
   )
 
   io.mem_probe.ready := Mux(state === s_idle, true.B, false.B) 

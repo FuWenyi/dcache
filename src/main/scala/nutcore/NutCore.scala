@@ -93,7 +93,7 @@ object AddressSpace extends HasNutCoreParameter {
 
 class NutCore(implicit val p: NutCoreConfig) extends NutCoreModule extends LazyModule{
 
-  val dcache = LazyModule(new SSDCache())
+  val dcache = LazyModule(new DCache())
   
   lazy val module = new NutCoreImp(this)
 }
@@ -134,7 +134,7 @@ class NutCoreImp(outer: NutCore) extends NutCoreModule extends LazyModuleImp(out
   dcache = outer.dcache.module
   dcache.io.in <> SSDbackend.io.dmem
   dcache.io.mmio <> mmioXbar.io.in(1)
-  dcache.io.flush <> false.B
+  dcache.io.flush := false.B
 
   // DMA?
   io.frontend.resp.bits := DontCare
