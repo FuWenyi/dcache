@@ -106,7 +106,7 @@ sealed class DataBundle(implicit val cacheConfig: SSDCacheConfig) extends CacheB
 class SSDCacheIO(implicit val cacheConfig: SSDCacheConfig) extends Bundle with HasNutCoreParameter with HasCacheConst {
   val in = Flipped(new SimpleBusUC(userBits = userBits, idBits = idBits))
   val flush = Input(Bool())
-  //val out = new SimpleBusC
+  val out = new SimpleBusC
   val mmio = new SimpleBusUC
 }
 trait HasSSDCacheIO {

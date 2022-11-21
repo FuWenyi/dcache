@@ -33,6 +33,7 @@ import freechips.rocketchip.tilelink.ClientMetadata
 import chipsalliance.rocketchip.config.Parameters
 import freechips.rocketchip.rocket.constants.MemoryOpConstants
 import freechips.rocketchip.tilelink.MemoryOpCategories._
+import freechips.rocketchip.config.Parameters
 
 case class DCacheConfig (
                          ro: Boolean = false,
@@ -88,7 +89,7 @@ trait HasDCacheConst {
 }
 
 abstract class DCacheBundle(implicit cacheConfig: DCacheConfig) extends Bundle with HasNutCoreParameter with HasDCacheConst
-abstract class DCacheModule(implicit cacheConfig: DCacheConfig) extends Module with HasNutCoreParameter with HasDCacheConst with HasNutCoreLog with MemoryOpConstants
+abstract class DCacheModule(implicit cacheConfig: DCacheConfig) extends Module with HasNutCoreParameter with HasDCacheConst with MemoryOpConstants
 
 class DTagBundle(implicit val cacheConfig: DCacheConfig) extends DCacheBundle {
   val tag = Output(UInt(TagBits.W))
@@ -199,10 +200,10 @@ sealed class DCacheStage2(edge: TLEdgeOut)(implicit val cacheConfig: DCacheConfi
   val tagWay = io.tagReadResp
   val req = io.in.bits.req
   val addr = req.addr.asTypeOf(addrBundle)
-  val hitVec = VecInit((tagWay zip metaWay).map{case (t, m) => (m.asTypeOf(new ClientMetadata).isValid() && (t === addr.tag))}).asUInt
+  val hitVec = VecInit((tagWay zip metaWay).map{case (t, m) => (m.coh.asTypeOf(new ClientMetadata).isValid() && (t.tag === addr.tag))}).asUInt
   val hitTag = hitVec.orR && io.in.valid      //hit tag and meta not nothing
     //has hit tag: find its coh
-  val coh = Mux(hitTag, Mux1H(hitVec, metaWay).asTypeOf(new ClientMetadata), ClientMetadata.onReset)
+  val coh = Mux(hitTag, Mux1H(hitVec, metaWay).coh.asTypeOf(new ClientMetadata), ClientMetadata.onReset)
   val hitMeta = coh.onAccess(req.cmd)._1
   val hit = hitTag && hitMeta && io.in.valid
     //miss need acquire and release(if not hitTag)
@@ -279,8 +280,8 @@ sealed class DCacheStage2(edge: TLEdgeOut)(implicit val cacheConfig: DCacheConfi
 
     //something for victim
   val needRel = miss && !hitTag && !hasInvalidWay
-  val victimCoh = Mux1H(waymask, metaWay).asTypeOf(new ClientMetadata)
-  val vicAddr = Cat(Mux1H(waymask, tagWay), addr.index, 0.U(6.W))
+  val victimCoh = Mux1H(waymask, metaWay).coh.asTypeOf(new ClientMetadata)
+  val vicAddr = Cat(Mux1H(waymask, tagWay).tag, addr.index, 0.U(6.W))
   
   release.io.req := req
   release.io.req.valid := needRel     //choose victim
@@ -298,19 +299,19 @@ sealed class DCacheStage2(edge: TLEdgeOut)(implicit val cacheConfig: DCacheConfi
   val relOK = !needRel || (needRel && isrelDone)
   
   io.out := acquireAccess.io.resp
-  io.out.valid := io.in.valid && (hit || (miss && io.resp.valid && relOK)) 
+  io.out.valid := io.in.valid && (hit || (miss && acquireAccess.io.resp.valid && relOK)) 
   io.out.bits.rdata := Mux(hit, dataRead, acquireAccess.io.resp.bits.rdata)
   io.in.ready := io.out.ready
 
 }
 
-class DCache(implicit val cacheConfig: DCacheConfig) extends LazyModule with HasNutCoreParameter with HasDCacheConst with HasNutCoreLog{
+class DCache(implicit val cacheConfig: DCacheConfig) extends LazyModule with HasNutCoreParameter with HasDCacheConst{
   
   val clientParameters = TLMasterPortParameters.v1(
     Seq(TLMasterParameters.v1(
       name = "dcache",
-      sourceId = IdRange(srcBits + 1.U),
-      supportsProbe = LineSize
+      sourceId = IdRange(0, 1 << srcBits),
+      supportsProbe = TransferSizes(LineSize)
     )),
     requestFields = Seq(),
     echoFields = Seq()
@@ -321,7 +322,7 @@ class DCache(implicit val cacheConfig: DCacheConfig) extends LazyModule with Has
   lazy val module = new DCacheImp(this)
 }
 
-class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheIO with HasNutCoreParameter with HasDCacheConst with HasNutCoreLog{ 
+class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheIO with HasNutCoreParameter with HasDCacheConst{ 
 
   val (bus, edge) = outer.clientNode.out.head
   // cache pipeline
