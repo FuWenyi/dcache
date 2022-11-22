@@ -28,26 +28,28 @@ import bus.axi4._
 import nutcore._
 import utils.GTimer
 import difftest._
-import freechips.rocketchip.amba.AXI4RAM
-import freechips.rocketchip.amba.AXI4Xbar
+import freechips.rocketchip.amba.axi4.{AXI4Xbar, AXI4Delayer, AXI4RAM}
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.diplomacy.{AddressSet, LazyModule, LazyModuleImp}
+import top.DefaultConfig
+import chipsalliance.rocketchip.config.Parameters
 
-class SimTop extends Module {
+class SimTop(implicit p: Parameters) extends Module {
   val io = IO(new Bundle{
     val logCtrl = new LogCtrlIO
     val perfInfo = new PerfInfoIO
     val uart = new UARTIO
   })
 
-  lazy val config = DefaultConfig(FPGAPlatform = false)
-  val soc = Module(new NutShell()(config))
+  //lazy val config = new DefaultConfig(FPGAPlatform = false)
+  val l_soc = LazyModule(new NutShell())
+  val soc = Module(l_soc.module)
   //val mem = LazyModule(new AXI4RAM(memByte = 128 * 1024 * 1024, useBlackBox = true))
-  val mem = LazyModule(new AXI4RAM(address = AddressSet(0x80000000, 0x7ffffff)))     //128MB
+  val mem = LazyModule(new AXI4RAM(AddressSet(0x80000000, 0x7ffffff)))     //128MB
   
   val xbar = AXI4Xbar()
-  xbar := TLToAXI4() := soc.l2cache.node := soc.nutcore.dcache.clientNode
-  xbar := soc.imem.node
+  xbar := TLToAXI4() := l_soc.l2cache.node := l_soc.nutcore.dcache.clientNode
+  xbar := l_soc.imem.node
   /*val l_simAXIMem = LazyModule(new AXI4RAMWrapper(
     soc.memAXI4SlaveNode, 128 * 1024 * 1024, useBlockBox = true
   ))
@@ -61,7 +63,7 @@ class SimTop extends Module {
   soc.io.frontend <> mmio.io.dma
 
   //memdelay.io.in <> soc.io.mem 
-  mem.node := TLDelayer(0) := xbar
+  mem.node := AXI4Delayer(0) := xbar
 
   mmio.io.rw <> soc.io.mmio
 

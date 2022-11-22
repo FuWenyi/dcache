@@ -22,8 +22,10 @@ import chisel3.util.experimental.BoringUtils
 
 import utils._
 import difftest._
+import chipsalliance.rocketchip.config.Parameters
+import system.HasNutCoreParameters
 
-class Decoder(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType {
+class Decoder(implicit p: Parameters) extends NutCoreModule with HasInstrType {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new CtrlFlowIO))
     val out = Decoupled(new DecodeIO)
@@ -156,7 +158,7 @@ class Decoder(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstr
 
 }
 
-class IDU(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType {
+class IDU(implicit p: Parameters) extends NutCoreModule with HasInstrType with HasNutCoreParameters {
   val io = IO(new Bundle {
     val in = Vec(4, Flipped(Decoupled(new CtrlFlowIO)))
     val out = Vec(4, Decoupled(new DecodeIO))
@@ -198,7 +200,7 @@ class IDU(implicit val p: NutCoreConfig) extends NutCoreModule with HasInstrType
   //   printf("fire pc %x branch %x inst %x\n", runahead.io.pc, runahead.io.branch, io.out(0).bits.cf.instr)
   // }
 
-  if (!p.FPGAPlatform) {
+  if (!FPGAPlatform) {
     //BoringUtils.addSource(decoder1.io.isWFI | decoder2.io.isWFI, "isWFI")
   }
 }

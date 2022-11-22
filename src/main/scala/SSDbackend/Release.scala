@@ -12,7 +12,7 @@ import freechips.rocketchip.tilelink.ClientMetadata
 import chipsalliance.rocketchip.config.Parameters
 import freechips.rocketchip.tilelink.MemoryOpCategories._
 
-class Release(edge: TLEdgeOut)(implicit val p: Parameters) extends DCacheModule {
+class Release(edge: TLEdgeOut)(implicit p: Parameters) extends DCacheModule {
   val io = IO(new Bundle {
     val req = Flipped(Decoupled(new SimpleBusReqBundle(userBits = userBits, idBits = idBits)))
     val release_ok = Output(Bool())

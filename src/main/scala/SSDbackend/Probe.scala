@@ -11,7 +11,7 @@ import freechips.rocketchip.tilelink._
 import freechips.rocketchip.tilelink.ClientMetadata
 import chipsalliance.rocketchip.config.Parameters
 
-class ProbeReq(implicit val p: Parameters) extends DCacheBundle{
+class ProbeReq(implicit p: Parameters) extends DCacheBundle{
   val opcode = UInt()
   val param  = UInt(TLPermissions.bdWidth.W)
   val source = UInt()
@@ -24,7 +24,7 @@ class ProbeReq(implicit val p: Parameters) extends DCacheBundle{
   }*/
 }
 
-class Probe(edge: TLEdgeOut)(implicit val p: Parameters) extends DCacheModule {
+class Probe(edge: TLEdgeOut)(implicit p: Parameters) extends DCacheModule {
   val io = IO(new Bundle {
     val mem_probe = Flipped(DecoupledIO(new TLBundleB(edge.bundle)))
     val mem_probeAck = DecoupledIO(new TLBundleC(edge.bundle))

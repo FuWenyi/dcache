@@ -21,8 +21,10 @@ import chisel3.util._
 
 import bus.axi4._
 import utils._
-import freechips.rocketchip.amba.axi4._ 
-import freechips.rocketchip.diplomacy.{AddressSet, LazyModule, LazyModuleImp}
+import freechips.rocketchip.amba.axi4.{AXI4MasterNode, AXI4MasterPortParameters, AXI4MasterParameters} 
+import freechips.rocketchip.diplomacy.{AddressSet, IdRange, LazyModule, LazyModuleImp}
+import chipsalliance.rocketchip.config.Parameters
+import freechips.rocketchip.tilelink._
 
 class AXI42SimpleBusConverter() extends Module {
   val idBits = 18
@@ -209,16 +211,20 @@ object SimpleBus2AXI4Converter {
   }
 }
 
-class SB2AXI4MasterNode(isFromCache: Boolean) extends Module {
+class SB2AXI4MasterNode(isFromCache: Boolean)(implicit p: Parameters) extends LazyModule {
+  val idBits = 18
   val node = AXI4MasterNode(
-    AXI4MasterPortParameters(
-      masters = Seq(
-        AXI4MasterParameters.v1(
-          name = "icacheAxiMaster",
-          emitsSizes = TransferSizes(1, L2BlockSize)    
+    Seq(
+      AXI4MasterPortParameters(
+        masters = Seq(
+          AXI4MasterParameters(
+            name = "icacheAxiMaster",
+            id = IdRange(0, 1 << idBits)
+            //emitsSizes = TransferSizes(1, L2BlockSize)    
+          )
         )
+      //beatBytes = L2OuterBusWidth / 8
       )
-      beatBytes = L2OuterBusWidth / 8
     )
   )
   
@@ -229,9 +235,9 @@ class SB2AXI4MasterNode(isFromCache: Boolean) extends Module {
     })
 
     val (bus, edge) = node.out.head
-    val toAXI4Lite = !(io.in.req.valid && io.in.req.bits.isBurst()) && (outType.getClass == classOf[AXI4Lite]).B
-    val toAXI4 = (outType.getClass == classOf[AXI4]).B
-    assert(toAXI4Lite || toAXI4)
+    //val toAXI4Lite = !(io.in.req.valid && io.in.req.bits.isBurst()) && (outType.getClass == classOf[AXI4Lite]).B
+    //val toAXI4 = (outType.getClass == classOf[AXI4]).B
+    //assert(toAXI4Lite || toAXI4)
 
     val (mem, axi) = (io.in, bus)
     val (ar, aw, w, r, b) = (axi.ar.bits, axi.aw.bits, axi.w.bits, axi.r.bits, axi.b.bits)
@@ -244,7 +250,7 @@ class SB2AXI4MasterNode(isFromCache: Boolean) extends Module {
     def LineBeats = 8
     val wlast = WireInit(true.B)
     val rlast = WireInit(true.B)
-    if (outType.getClass == classOf[AXI4]) {
+    /*if (outType.getClass == classOf[AXI4]) {
       val axi4 = io.out.asInstanceOf[AXI4]
       axi4.ar.bits.id    := 0.U
       axi4.ar.bits.len   := Mux(mem.req.bits.isBurst(), (LineBeats - 1).U, 0.U)
@@ -258,7 +264,7 @@ class SB2AXI4MasterNode(isFromCache: Boolean) extends Module {
       axi4.w.bits.last   := mem.req.bits.isWriteLast() || mem.req.bits.isWriteSingle()
       wlast := axi4.w.bits.last
       rlast := axi4.r.bits.last
-    }
+    }*/
 
     aw := ar
     mem.resp.bits.rdata := r.data

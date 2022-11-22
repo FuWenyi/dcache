@@ -9,7 +9,7 @@ import nutcore.HasNutCoreParameter
 import utils._
 import freechips.rocketchip.amba.axi4._ 
 
-/*object AXI4Parameters extends HasNutCoreParameter {
+object AXI4Parameters extends HasNutCoreParameter {
   // These are all fixed by the AXI4 standard:
   val lenBits   = 8
   val sizeBits  = 3
@@ -42,7 +42,7 @@ import freechips.rocketchip.amba.axi4._
   def RESP_EXOKAY = 1.U(respBits.W)
   def RESP_SLVERR = 2.U(respBits.W)
   def RESP_DECERR = 3.U(respBits.W)
-}*/
+}
 
 object XiaoheAXI4Parameters extends HasNutCoreParameter {
   // These are not fixed:

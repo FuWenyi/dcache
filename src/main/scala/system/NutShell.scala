@@ -27,6 +27,7 @@ import huancun.{HCCacheParamsKey, HuanCun}
 import freechips.rocketchip.amba.axi4._ 
 import freechips.rocketchip.tilelink._ 
 import chipsalliance.rocketchip.config.Parameters
+import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp}
 //import freechips.rocketchip.diplomacy.{AddressSet, LazyModule, LazyModuleImp}
 
 import chisel3._
@@ -48,15 +49,15 @@ class ILABundle extends NutCoreBundle {
   val InstrCnt = UInt(64.W)
 }
 
-class NutShell()(implicit p: Parameters) extends LazyModule with HasSoCParameter{
+class NutShell()(implicit p: Parameters) extends LazyModule{
   val nutcore = LazyModule(new NutCore())
-  private val l2cache = LazyModule(new HuanCun())
-  val imem = LazyModule(new SB2AXI4MasterNode(true.B))
-  memAXI4SlaveNode := TLToAXI4() := l2cache.node := nutcore.dcache.clientNode
+  val l2cache = LazyModule(new HuanCun())
+  val imem = LazyModule(new SB2AXI4MasterNode(true))
+  //memAXI4SlaveNode := TLToAXI4() := l2cache.node := nutcore.dcache.clientNode
   lazy val module = new NutShellImp(this)
 }
 
-class NutShellImp(outer: NutShell) extends LazyModuleImp(outer) with HasNutCoreParameters{
+class NutShellImp(outer: NutShell) extends LazyModuleImp(outer) with HasNutCoreParameters with HasSoCParameter{
   val io = IO(new Bundle{
     //val mem = new AXI4
     val mmio = (if (FPGAPlatform) { new AXI4 } else { new SimpleBusUC })
@@ -78,10 +79,10 @@ class NutShellImp(outer: NutShell) extends LazyModuleImp(outer) with HasNutCoreP
   axi2sb.io.in <> io.frontend
   nutcore.io.frontend <> axi2sb.io.out
 
-  val memport = xbar.io.out.toMemPort()
+  /*val memport = xbar.io.out.toMemPort()
   memport.resp.bits.data := DontCare
   memport.resp.valid := DontCare
-  memport.req.ready := DontCare
+  memport.req.ready := DontCare*/
 
   /*val mem = if (HasL2cache) {
     val l2cacheOut = Wire(new SimpleBusC)
@@ -111,7 +112,7 @@ class NutShellImp(outer: NutShell) extends LazyModuleImp(outer) with HasNutCoreP
   memAddrMap.io.in <> nutcore.io.imem.mem
   
   //io.mem <> memAddrMap.io.out.toAXI4(true)
-  imem.io.in <> memAddrMap.io.out.toAXI4(true)
+  imem.io.in <> memAddrMap.io.out
 
   nutcore.io.imem.coh.resp.ready := true.B
   nutcore.io.imem.coh.req.valid := false.B

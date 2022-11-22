@@ -39,8 +39,8 @@ trait HasL1CacheParameters extends HasTileParameters {
   def refillCycles = cacheDataBeats
 }
 
-abstract class L1CacheModule(implicit val p: Parameters) extends Module
+abstract class L1CacheModule(implicit p: Parameters) extends Module
   with HasL1CacheParameters
 
-abstract class L1CacheBundle(implicit val p: Parameters) extends Bundle
+abstract class L1CacheBundle(implicit p: Parameters) extends Bundle
   with HasL1CacheParameters

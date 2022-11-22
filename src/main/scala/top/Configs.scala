@@ -7,6 +7,7 @@ import nutcore._
 import system._
 
 import chipsalliance.rocketchip.config._
+import SSDbackend.{DCacheParamsKey, DCacheParameters}
 
 class BaseConfig(FPGAPlatform: Boolean = true) extends Config((site, here, up) => {
   case NutCoreParamsKey => NutCoreParameters(FPGAPlatform = FPGAPlatform)

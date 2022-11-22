@@ -92,14 +92,17 @@ object AddressSpace extends HasNutCoreParameter {
   }).reduce(_ || _)
 }
 
-class NutCore()(implicit val p: Parameters) extends LazyModule with HasNutCoreParameter with HasNutCoreConst with HasExceptionNO with HasBackendConst with HasNutCoreLog{
+class NutCore()(implicit p: Parameters) extends LazyModule with HasNutCoreParameter with HasNutCoreConst with HasExceptionNO with HasBackendConst{
 
   val dcache = LazyModule(new DCache())
   
   lazy val module = new NutCoreImp(this)
 }
 
-class NutCoreImp(outer: NutCore) extends LazyModuleImp(outer) with HasNutCoreParameter with HasNutCoreConst with HasExceptionNO with HasBackendConst with HasNutCoreLog{
+class NutCoreImp(outer: NutCore) extends LazyModuleImp(outer) with HasNutCoreParameter with HasNutCoreConst with HasExceptionNO with HasBackendConst{
+  
+  val dcache = outer.dcache.module
+
   class NutCoreIO extends Bundle {
     val imem = new SimpleBusC
     //val dmem = new SimpleBusC
@@ -110,7 +113,7 @@ class NutCoreImp(outer: NutCore) extends LazyModuleImp(outer) with HasNutCorePar
 
   // Frontend
   val frontend = (Settings.get("IsRV32"), Settings.get("EnableOutOfOrderExec")) match {
-    case (true, _)      => Module(new Frontend_embedded)
+    case (true, _)      => Module(new Frontend_embedded())
     case (false, true)  => Module(new Frontend_ooo)
     case (false, false) => Module(new Frontend_inorder)
   }
@@ -132,9 +135,9 @@ class NutCoreImp(outer: NutCore) extends LazyModuleImp(outer) with HasNutCorePar
   val s2NotReady = WireInit(false.B)
   io.imem <> SSDCache(in = frontend.io.imem, mmio = mmioXbar.io.in(0), flush = (frontend.io.flushVec(0) | frontend.io.bpFlush))(SSDCacheConfig(ro = true, name = "icache", userBits = ICacheUserBundleWidth))
   //io.dmem <> SSDCache(in = SSDbackend.io.dmem, mmio = mmioXbar.io.in(1), flush = false.B)(SSDCacheConfig(ro = true, name = "dcache"))
-  dcache = outer.dcache.module
+  
   dcache.io.in <> SSDbackend.io.dmem
-  dcache.io.mmio <> mmioXbar.io.in(1)
+  //dcache.io.mmio <> mmioXbar.io.in(1)
   dcache.io.flush := false.B
 
   // DMA?
