@@ -23,7 +23,8 @@ import chisel3.util.experimental.BoringUtils
 import bus.simplebus._
 import bus.axi4._
 import utils._
-import top.Settings
+import top._
+import chipsalliance.rocketchip.config.Parameters
 
 import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp}
 
@@ -91,7 +92,7 @@ object AddressSpace extends HasNutCoreParameter {
   }).reduce(_ || _)
 }
 
-class NutCore(implicit val p: NutCoreConfig) extends LazyModule with HasNutCoreParameter with HasNutCoreConst with HasExceptionNO with HasBackendConst with HasNutCoreLog{
+class NutCore()(implicit val p: Parameters) extends LazyModule with HasNutCoreParameter with HasNutCoreConst with HasExceptionNO with HasBackendConst with HasNutCoreLog{
 
   val dcache = LazyModule(new DCache())
   

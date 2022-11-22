@@ -40,7 +40,7 @@ class SimTop extends Module {
     val uart = new UARTIO
   })
 
-  lazy val config = NutCoreConfig(FPGAPlatform = false)
+  lazy val config = DefaultConfig(FPGAPlatform = false)
   val soc = Module(new NutShell()(config))
   //val mem = LazyModule(new AXI4RAM(memByte = 128 * 1024 * 1024, useBlackBox = true))
   val mem = LazyModule(new AXI4RAM(address = AddressSet(0x80000000, 0x7ffffff)))     //128MB

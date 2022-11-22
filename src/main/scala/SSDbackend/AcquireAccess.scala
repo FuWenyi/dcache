@@ -11,7 +11,7 @@ import freechips.rocketchip.tilelink._
 import freechips.rocketchip.tilelink.ClientMetadata
 import chipsalliance.rocketchip.config.Parameters
 
-sealed class AcquireAccess(edge: TLEdgeOut)(implicit val cacheConfig: DCacheConfig) extends DCacheModule{
+sealed class AcquireAccess(edge: TLEdgeOut)(implicit val p: Parameters) extends DCacheModule{
   val io = IO(new Bundle {
     val isMMIO = Input(Bool())
     val req = Flipped(Decoupled(new SimpleBusReqBundle(userBits = userBits, idBits = idBits)))

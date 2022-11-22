@@ -20,12 +20,13 @@ import nutcore._
 import bus.axi4.{AXI4, AXI4Lite}
 import bus.simplebus._
 import device.{AXI4CLINT, AXI4PLIC}
-import top.Settings
+import top._
 
 import huancun.debug.TLLogger
 import huancun.{HCCacheParamsKey, HuanCun}
 import freechips.rocketchip.amba.axi4._ 
 import freechips.rocketchip.tilelink._ 
+import chipsalliance.rocketchip.config.Parameters
 //import freechips.rocketchip.diplomacy.{AddressSet, LazyModule, LazyModuleImp}
 
 import chisel3._
@@ -47,21 +48,21 @@ class ILABundle extends NutCoreBundle {
   val InstrCnt = UInt(64.W)
 }
 
-class NutShell(implicit val p: NutCoreConfig) extends LazyModule with HasSoCParameter{
-  val nutcore = LazyModule(new NutCore)
+class NutShell()(implicit p: Parameters) extends LazyModule with HasSoCParameter{
+  val nutcore = LazyModule(new NutCore())
   private val l2cache = LazyModule(new HuanCun())
   val imem = LazyModule(new SB2AXI4MasterNode(true.B))
   memAXI4SlaveNode := TLToAXI4() := l2cache.node := nutcore.dcache.clientNode
   lazy val module = new NutShellImp(this)
 }
 
-class NutShellImp(outer: NutShell) extends LazyModuleImp(outer){
+class NutShellImp(outer: NutShell) extends LazyModuleImp(outer) with HasNutCoreParameters{
   val io = IO(new Bundle{
     //val mem = new AXI4
-    val mmio = (if (p.FPGAPlatform) { new AXI4 } else { new SimpleBusUC })
+    val mmio = (if (FPGAPlatform) { new AXI4 } else { new SimpleBusUC })
     val frontend = Flipped(new AXI4)
     val meip = Input(UInt(Settings.getInt("NrExtIntr").W))
-    val ila = if (p.FPGAPlatform && EnableILA) Some(Output(new ILABundle)) else None
+    val ila = if (FPGAPlatform && EnableILA) Some(Output(new ILABundle)) else None
   })
 
   val nutcore = outer.nutcore.module
@@ -128,10 +129,10 @@ class NutShellImp(outer: NutShell) extends LazyModuleImp(outer){
   mmioXbar.io.in <> nutcore.io.mmio
 
   val extDev = mmioXbar.io.out(0)
-  if (p.FPGAPlatform) { io.mmio <> extDev.toAXI4() }
+  if (FPGAPlatform) { io.mmio <> extDev.toAXI4() }
   else { io.mmio <> extDev }
 
-  val clint = Module(new AXI4CLINT(sim = !p.FPGAPlatform))
+  val clint = Module(new AXI4CLINT(sim = !FPGAPlatform))
   clint.io.in <> mmioXbar.io.out(1).toAXI4Lite()
   val mtipSync = clint.io.extra.get.mtip
   val msipSync = clint.io.extra.get.msip
@@ -146,7 +147,7 @@ class NutShellImp(outer: NutShell) extends LazyModuleImp(outer){
   
 
   // ILA
-  if (p.FPGAPlatform) {
+  if (FPGAPlatform) {
     def BoringUtilsConnect(sink: UInt, id: String) {
       val temp = WireInit(0.U(64.W))
       BoringUtils.addSink(temp, id)

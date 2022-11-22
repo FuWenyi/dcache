@@ -210,7 +210,7 @@ object SimpleBus2AXI4Converter {
 }
 
 class SB2AXI4MasterNode(isFromCache: Boolean) extends Module {
-  val node = AXISMasterNode(
+  val node = AXI4MasterNode(
     AXI4MasterPortParameters(
       masters = Seq(
         AXI4MasterParameters.v1(

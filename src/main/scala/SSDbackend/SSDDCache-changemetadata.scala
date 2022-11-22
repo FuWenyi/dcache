@@ -26,16 +26,19 @@ import com.google.protobuf.Internal.FloatList
 import utils._
 import top.Settings
 import nutcore._
+import system._
 
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.diplomacy.{IdRange, LazyModule, LazyModuleImp, TransferSizes}
 import freechips.rocketchip.tilelink.ClientMetadata
-import chipsalliance.rocketchip.config.Parameters
+import chipsalliance.rocketchip.config.{Field, Parameters}
 import freechips.rocketchip.rocket.constants.MemoryOpConstants
 import freechips.rocketchip.tilelink.MemoryOpCategories._
 import freechips.rocketchip.config.Parameters
 
-case class DCacheConfig (
+case object DCacheParamsKey extends Field[DCacheParameters]
+
+case class DCacheParameters (
                          ro: Boolean = false,
                          name: String = "dcache",
                          userBits: Int = 0,
@@ -43,11 +46,12 @@ case class DCacheConfig (
 
                          totalSize: Int = 16, // Kbytes
                          ways: Int = 4,
-                         srcBits: Int = 1
-                       )
+                         srcBits: Int = 1  
+)
 
-trait HasDCacheConst {
-  implicit val cacheConfig: DCacheConfig
+trait HasDCacheParameters {
+  implicit val p: Parameters
+  val cacheConfig = p(DCacheParamsKey)
 
   val PAddrBits: Int
   val XLEN: Int
@@ -86,12 +90,13 @@ trait HasDCacheConst {
 
   def isSameWord(a1: UInt, a2: UInt) = ((a1 >> 2) == (a2 >> 2))
   def isSetConflict(a1: UInt, a2: UInt) = (a1.asTypeOf(addrBundle).index === a2.asTypeOf(addrBundle).index)
+
 }
 
-abstract class DCacheBundle(implicit cacheConfig: DCacheConfig) extends Bundle with HasNutCoreParameter with HasDCacheConst
-abstract class DCacheModule(implicit cacheConfig: DCacheConfig) extends Module with HasNutCoreParameter with HasDCacheConst with MemoryOpConstants
+abstract class DCacheBundle(implicit val p: Parameters) extends Bundle with HasNutCoreParameter with HasDCacheParameters
+abstract class DCacheModule(implicit val p: Parameters) extends Module with HasNutCoreParameter with HasDCacheParameters with MemoryOpConstants
 
-class DTagBundle(implicit val cacheConfig: DCacheConfig) extends DCacheBundle {
+class DTagBundle(implicit val p: Parameters) extends DCacheBundle {
   val tag = Output(UInt(TagBits.W))
 
   def apply(tag: UInt) = {
@@ -100,7 +105,7 @@ class DTagBundle(implicit val cacheConfig: DCacheConfig) extends DCacheBundle {
   }
 }
 
-class DMetaBundle(implicit val cacheConfig: DCacheConfig) extends DCacheBundle {
+class DMetaBundle(implicit val p: Parameters) extends DCacheBundle {
   val coh = new ClientMetadata
 
   def apply(coh: ClientMetadata) = {
@@ -109,7 +114,7 @@ class DMetaBundle(implicit val cacheConfig: DCacheConfig) extends DCacheBundle {
   }
 }
 
-class DDataBundle(implicit val cacheConfig: DCacheConfig) extends DCacheBundle {
+class DDataBundle(implicit val p: Parameters) extends DCacheBundle {
   val data = Output(UInt(DataBits.W))
 
   def apply(data: UInt) = {
@@ -118,7 +123,7 @@ class DDataBundle(implicit val cacheConfig: DCacheConfig) extends DCacheBundle {
   }
 }
 
-class DCacheIO(implicit val cacheConfig: DCacheConfig) extends Bundle with HasNutCoreParameter with HasDCacheConst {
+class DCacheIO(implicit val p: Parameters) extends Bundle with HasNutCoreParameter with HasDCacheParameters {
   val in = Flipped(new SimpleBusUC(userBits = userBits, idBits = idBits))
   val flush = Input(Bool())
   //val out = new SimpleBusC
@@ -126,16 +131,16 @@ class DCacheIO(implicit val cacheConfig: DCacheConfig) extends Bundle with HasNu
 }
 
 trait HasDCacheIO {
-  implicit val cacheConfig: DCacheConfig
+  implicit val p: Parameters
   val io = IO(new DCacheIO)
 }
 
-sealed class DStage1IO(implicit val cacheConfig: DCacheConfig) extends DCacheBundle {
+sealed class DStage1IO(implicit val p: Parameters) extends DCacheBundle {
   val req = new SimpleBusReqBundle(userBits = userBits, idBits = idBits)
   val mmio = Output(Bool())
 }
 // meta read
-sealed class DCacheStage1(implicit val cacheConfig: DCacheConfig) extends DCacheModule {
+sealed class DCacheStage1(implicit val p: Parameters) extends DCacheModule {
   class SSDCacheStage1IO extends Bundle {
     val in = Flipped(Decoupled(new SimpleBusReqBundle(userBits = userBits, idBits = idBits)))
     val out = Decoupled(new DStage1IO)
@@ -173,7 +178,7 @@ sealed class DCacheStage1(implicit val cacheConfig: DCacheConfig) extends DCache
 
 
 // check
-sealed class DCacheStage2(edge: TLEdgeOut)(implicit val cacheConfig: DCacheConfig) extends DCacheModule {
+sealed class DCacheStage2(edge: TLEdgeOut)(implicit val p: Parameters) extends DCacheModule {
   class SSDCacheStage2IO(edge: TLEdgeOut) extends Bundle {
     val in = Flipped(Decoupled(new DStage1IO))
     val out = Decoupled(new SimpleBusRespBundle(userBits = userBits, idBits = idBits))
@@ -305,7 +310,7 @@ sealed class DCacheStage2(edge: TLEdgeOut)(implicit val cacheConfig: DCacheConfi
 
 }
 
-class DCache(implicit val cacheConfig: DCacheConfig) extends LazyModule with HasNutCoreParameter with HasDCacheConst{
+class DCache()(implicit val p: Parameters) extends LazyModule with HasNutCoreParameter with HasDCacheParameters{
   
   val clientParameters = TLMasterPortParameters.v1(
     Seq(TLMasterParameters.v1(
@@ -322,7 +327,7 @@ class DCache(implicit val cacheConfig: DCacheConfig) extends LazyModule with Has
   lazy val module = new DCacheImp(this)
 }
 
-class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheIO with HasNutCoreParameter with HasDCacheConst{ 
+class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheIO with HasNutCoreParameter with HasDCacheParameters{ 
 
   val (bus, edge) = outer.clientNode.out.head
   // cache pipeline
