@@ -156,7 +156,7 @@ sealed class DCacheStage1(implicit val p: Parameters) extends DCacheModule {
   ))
 
   // read meta array, tag array and data array
-  val readBusValid = io.in.fire()
+  val readBusValid = io.in.fire
   io.metaReadBus.apply(valid = readBusValid, setIdx = getMetaIdx(io.in.bits.addr))
   io.tagReadBus.apply(valid = readBusValid, setIdx = getMetaIdx(io.in.bits.addr))
   io.dataReadBus.apply(valid = readBusValid, setIdx = getDataIdx(io.in.bits.addr))
@@ -300,7 +300,7 @@ sealed class DCacheStage2(edge: TLEdgeOut)(implicit val p: Parameters) extends D
     //release操作完成
   val isrelDone = RegInit(false.B)
   when (release.io.release_ok) {isrelDone := true.B}
-  when (io.out.fire()) {isrelDone := false.B}
+  when (io.out.fire) {isrelDone := false.B}
   val relOK = !needRel || (needRel && isrelDone)
   
   io.out := acquireAccess.io.resp
@@ -362,7 +362,7 @@ class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheIO wit
   //channelCArb.io.in(0) <> probe.mem_probeAck
   //channelCArb.io.in(1) <> s2.io.mem_release
 
-  PipelineConnect(s1.io.out, s2.io.in, s2.io.out.fire(), io.flush)
+  PipelineConnect(s1.io.out, s2.io.in, s2.io.out.fire, io.flush)
 
   io.in.resp <> s2.io.out
   s2.io.flush := io.flush

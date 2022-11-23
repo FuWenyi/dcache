@@ -25,7 +25,7 @@ import chisel3._
 import chisel3.stage._
 
 import freechips.rocketchip.diplomacy.{DisableMonitors, AddressSet, LazyModule, LazyModuleImp}
-import chipsalliance.rocketchip.config.Parameters
+import chipsalliance.rocketchip.config._
 
 class Top extends Module {
   val io = IO(new Bundle{})
@@ -76,14 +76,13 @@ object TopMain extends App {
       println(f + " = " + v)
   }
   
-  lazy val config = new DefaultConfig(FPGAPlatform = false)
+  val config = new DefaultConfig(false)
 
   if (board == "sim") {
-    val soc = DisableMonitors(p => (new SimTop()(p)))(config)
-    Generator.execute(args, soc)
+    //val soc = DisableMonitors(p => new SimTop()(p))(config)
+    Generator.execute(args, DisableMonitors(p => new SimTop()(p))(config))
     /*(new ChiselStage).execute(args, Seq(
-      //ChiselGeneratorAnnotation(() => new SimTop()))
-      ChiselGeneratorAnnotation(soc))
+      ChiselGeneratorAnnotation((p => new SimTop()(p))(config)))
     )*/
   } else {
     (new ChiselStage).execute(args, Seq(

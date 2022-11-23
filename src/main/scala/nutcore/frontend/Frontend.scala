@@ -76,7 +76,7 @@ class Frontend_embedded(implicit val p: Parameters) extends NutCoreModule with H
   val ifu  = Module(new IFU_embedded)
   val idu  = Module(new IDU)
 
-  PipelineConnect(ifu.io.out, idu.io.in(0), idu.io.out(0).fire(), ifu.io.flushVec(0))
+  PipelineConnect(ifu.io.out, idu.io.in(0), idu.io.out(0).fire, ifu.io.flushVec(0))
   idu.io.in(1) := DontCare
 
   io.out <> idu.io.out
@@ -106,7 +106,7 @@ class Frontend_inorder(implicit val p: Parameters) extends NutCoreModule with Ha
   }
 
   PipelineConnect2(ifu.io.out, ibf.io.in, ifu.io.flushVec(0))
-  PipelineConnect(ibf.io.out, idu.io.in(0), idu.io.out(0).fire(), ifu.io.flushVec(1))
+  PipelineConnect(ibf.io.out, idu.io.in(0), idu.io.out(0).fire, ifu.io.flushVec(1))
   idu.io.in(1) := DontCare
 
   ibf.io.flush := ifu.io.flushVec(1)

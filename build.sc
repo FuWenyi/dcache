@@ -25,6 +25,9 @@ trait CommonModule extends ScalaModule {
   override def scalacOptions = Seq("-Xsource:2.11")
 
   override def ivyDeps = if(chiselOpt.isEmpty) Agg(ivys.chisel3) else Agg.empty[Dep]
+
+  override def scalacPluginIvyDeps = Agg(ivys.macroParadise, ivys.chisel3Plugin)
+
 }
 
 trait HasXsource211 extends ScalaModule {
@@ -38,14 +41,15 @@ trait HasXsource211 extends ScalaModule {
 }
 
 trait HasChisel3 extends ScalaModule {
-   override def repositoriesTask = T.task {
+  override def repositoriesTask = T.task {
     super.repositoriesTask() ++ Seq(
       MavenRepository("https://oss.sonatype.org/content/repositories/snapshots")
     )
   }
-   override def ivyDeps = Agg(
+  override def ivyDeps = Agg(
     ivy"edu.berkeley.cs::chisel3:3.5.0-RC1"
- )
+  )
+  //override def scalacPluginIvyDeps = Agg(ivy"edu.berkeley.cs:::chisel3-plugin:3.5.0")
 }
 
 //SbtModule基本上与普通的 ScalaModule 相同，但被配置为遵循 SBT 项目布局:
@@ -60,17 +64,6 @@ trait HasChiselTests extends CrossSbtModule  {
     def testFrameworks = Seq("org.scalatest.tools.Framework")
   }
 }
-
-/*object difftest extends SbtModule with CommonModule with HasChisel3 {
-  override def millSourcePath = os.pwd / "difftest"
-}
-
-object chiselModule extends CrossSbtModule with HasChisel3 with HasChiselTests with HasXsource211 {
-  def crossScalaVersion = "2.12.13"
-  override def moduleDeps = super.moduleDeps ++ Seq(
-    difftest
-  )
-}*/
 
 object rocketchip extends `rocket-chip`.common.CommonRocketChip {
 
@@ -133,9 +126,14 @@ object difftest extends CommonModule with SbtModule {
 
 object fudian extends CommonModule with SbtModule
 
-object chiselModule extends CrossSbtModule with HasChisel3 with HasChiselTests with HasXsource211{
+object chiselModule extends CrossSbtModule with CommonModule with HasChisel3 with HasChiselTests with HasXsource211{
 
   def crossScalaVersion = "2.12.13"
+  override def scalaVersion = "2.12.13"
+
+  //override def compileIvyDeps = Agg(ivys.macroParadise)
+  //override def scalacPluginIvyDeps = Agg(ivys.chisel3Plugin, ivys.macroParadise)
+  //def chisel3PluginIvyDeps = Agg(ivys.chisel3Plugin, ivys.macroParadise)
 
   def rocketModule = rocketchip
   def difftestModule = difftest
@@ -151,27 +149,3 @@ object chiselModule extends CrossSbtModule with HasChisel3 with HasChiselTests w
     fudianModule
   )
 }
-
-/*trait CommonNutShell extends CommonModule with SbtModule {
-
-  def rocketModule: PublishModule 
-  def difftestModule: CommonModule
-  def huancunModule: CommonModule
-  def fudianModule: CommonModule
-  
-  override def millSourcePath = os.pwd
-
-  override def moduleDeps = super.moduleDeps ++ Seq(
-    rocketModule,
-    difftestModule,
-    huancunModule,
-    fudianModule
-  )
-}
-
-object NutShell extends CommonNutShell with HasChisel3 with HasChiselTests with HasXsource211 {
-  override def rocketModule = rocketchip
-  override def difftestModule = difftest
-  override def huancunModule = huancun
-  override def fudianModule = fudian
-}*/

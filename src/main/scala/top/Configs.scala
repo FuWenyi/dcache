@@ -9,11 +9,12 @@ import system._
 import chipsalliance.rocketchip.config._
 import SSDbackend.{DCacheParamsKey, DCacheParameters}
 
-class BaseConfig(FPGAPlatform: Boolean = true) extends Config((site, here, up) => {
+class DefaultConfig(FPGAPlatform: Boolean = true) extends Config((site, here, up) => {
   case NutCoreParamsKey => NutCoreParameters(FPGAPlatform = FPGAPlatform)
   case DCacheParamsKey => DCacheParameters()
+  //case MonitorsEnabled => true
 })
 
-class DefaultConfig(FPGAPlatform: Boolean = true) extends Config(
+/*class DefaultConfig(FPGAPlatform: Boolean = true) extends Config(
   new BaseConfig(FPGAPlatform)
-)
+)*/

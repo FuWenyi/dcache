@@ -8,6 +8,8 @@ import SSDbackend._
 
 case object NutCoreParamsKey extends Field[NutCoreParameters]
 
+case object MonitorsEnabled extends Field[Boolean]
+
 case class NutCoreParameters (
                            FPGAPlatform: Boolean = true,
                            EnableDebug: Boolean = Settings.get("EnableDebug"),
