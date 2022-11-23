@@ -93,10 +93,10 @@ trait HasDCacheParameters {
 
 }
 
-abstract class DCacheBundle(implicit p: Parameters) extends Bundle with HasNutCoreParameter with HasDCacheParameters
-abstract class DCacheModule(implicit p: Parameters) extends Module with HasNutCoreParameter with HasDCacheParameters with MemoryOpConstants
+abstract class DCacheBundle() extends Bundle with HasNutCoreParameter with HasDCacheParameters with HasNutCoreParameters
+abstract class DCacheModule() extends Module with HasNutCoreParameter with HasDCacheParameters with MemoryOpConstants with HasNutCoreParameters
 
-class DTagBundle(implicit p: Parameters) extends DCacheBundle {
+class DTagBundle(implicit val p: Parameters) extends DCacheBundle {
   val tag = Output(UInt(TagBits.W))
 
   def apply(tag: UInt) = {
@@ -105,7 +105,7 @@ class DTagBundle(implicit p: Parameters) extends DCacheBundle {
   }
 }
 
-class DMetaBundle(implicit p: Parameters) extends DCacheBundle {
+class DMetaBundle(implicit val p: Parameters) extends DCacheBundle {
   val coh = new ClientMetadata
 
   def apply(coh: ClientMetadata) = {
@@ -114,7 +114,7 @@ class DMetaBundle(implicit p: Parameters) extends DCacheBundle {
   }
 }
 
-class DDataBundle(implicit p: Parameters) extends DCacheBundle {
+class DDataBundle(implicit val p: Parameters) extends DCacheBundle {
   val data = Output(UInt(DataBits.W))
 
   def apply(data: UInt) = {
@@ -123,7 +123,7 @@ class DDataBundle(implicit p: Parameters) extends DCacheBundle {
   }
 }
 
-class DCacheIO(implicit p: Parameters) extends Bundle with HasNutCoreParameter with HasDCacheParameters {
+class DCacheIO(implicit val p: Parameters) extends Bundle with HasNutCoreParameter with HasDCacheParameters {
   val in = Flipped(new SimpleBusUC(userBits = userBits, idBits = idBits))
   val flush = Input(Bool())
   //val out = new SimpleBusC
@@ -135,12 +135,12 @@ trait HasDCacheIO {
   val io = IO(new DCacheIO)
 }
 
-sealed class DStage1IO(implicit p: Parameters) extends DCacheBundle {
+sealed class DStage1IO(implicit val p: Parameters) extends DCacheBundle {
   val req = new SimpleBusReqBundle(userBits = userBits, idBits = idBits)
   val mmio = Output(Bool())
 }
 // meta read
-sealed class DCacheStage1(implicit p: Parameters) extends DCacheModule {
+sealed class DCacheStage1(implicit val p: Parameters) extends DCacheModule {
   class SSDCacheStage1IO extends Bundle {
     val in = Flipped(Decoupled(new SimpleBusReqBundle(userBits = userBits, idBits = idBits)))
     val out = Decoupled(new DStage1IO)
@@ -178,7 +178,7 @@ sealed class DCacheStage1(implicit p: Parameters) extends DCacheModule {
 
 
 // check
-sealed class DCacheStage2(edge: TLEdgeOut)(implicit p: Parameters) extends DCacheModule {
+sealed class DCacheStage2(edge: TLEdgeOut)(implicit val p: Parameters) extends DCacheModule {
   class SSDCacheStage2IO(edge: TLEdgeOut) extends Bundle {
     val in = Flipped(Decoupled(new DStage1IO))
     val out = Decoupled(new SimpleBusRespBundle(userBits = userBits, idBits = idBits))
@@ -199,7 +199,7 @@ sealed class DCacheStage2(edge: TLEdgeOut)(implicit p: Parameters) extends DCach
   }
 
   val io = IO(new SSDCacheStage2IO(edge))
-
+  
   //hit miss check
   val metaWay = io.metaReadResp
   val tagWay = io.tagReadResp
@@ -310,7 +310,7 @@ sealed class DCacheStage2(edge: TLEdgeOut)(implicit p: Parameters) extends DCach
 
 }
 
-class DCache()(implicit p: Parameters) extends LazyModule with HasNutCoreParameter with HasDCacheParameters{
+class DCache()(implicit p: Parameters) extends LazyModule with HasNutCoreParameter with HasDCacheParameters with HasNutCoreParameters{
   
   val clientParameters = TLMasterPortParameters.v1(
     Seq(TLMasterParameters.v1(
@@ -327,7 +327,7 @@ class DCache()(implicit p: Parameters) extends LazyModule with HasNutCoreParamet
   lazy val module = new DCacheImp(this)
 }
 
-class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheIO with HasNutCoreParameter with HasDCacheParameters{ 
+class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheIO with HasNutCoreParameter with HasDCacheParameters with HasNutCoreParameters{ 
 
   val (bus, edge) = outer.clientNode.out.head
   // cache pipeline

@@ -28,6 +28,7 @@ import freechips.rocketchip.amba.axi4._
 import freechips.rocketchip.tilelink._ 
 import chipsalliance.rocketchip.config.Parameters
 import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp}
+import utils._
 //import freechips.rocketchip.diplomacy.{AddressSet, LazyModule, LazyModuleImp}
 
 import chisel3._
@@ -49,7 +50,8 @@ class ILABundle extends NutCoreBundle {
   val InstrCnt = UInt(64.W)
 }
 
-class NutShell()(implicit p: Parameters) extends LazyModule{
+class NutShell()(implicit p: Parameters) extends LazyModule {
+  //val nutcore = LazyModule(new NutCore())
   val nutcore = LazyModule(new NutCore())
   val l2cache = LazyModule(new HuanCun())
   val imem = LazyModule(new SB2AXI4MasterNode(true))
@@ -68,42 +70,10 @@ class NutShellImp(outer: NutShell) extends LazyModuleImp(outer) with HasNutCoreP
 
   val nutcore = outer.nutcore.module
   val imem = outer.imem.module
-//  val cohMg = Module(new CoherenceManager)
-  //val xbar = Module(new SimpleBusCrossbarNto1(2))
-//  cohMg.io.in <> nutcore.io.imem.mem
-//  nutcore.io.dmem.coh <> cohMg.io.out.coh
-  //xbar.io.in(0) <> nutcore.io.imem.mem //cohMg.io.out.mem
-  //xbar.io.in(1) <> nutcore.io.dmem.mem
 
   val axi2sb = Module(new AXI42SimpleBusConverter())
   axi2sb.io.in <> io.frontend
   nutcore.io.frontend <> axi2sb.io.out
-
-  /*val memport = xbar.io.out.toMemPort()
-  memport.resp.bits.data := DontCare
-  memport.resp.valid := DontCare
-  memport.req.ready := DontCare*/
-
-  /*val mem = if (HasL2cache) {
-    val l2cacheOut = Wire(new SimpleBusC)
-    val l2cacheIn = if (HasPrefetch) {
-      val prefetcher = Module(new Prefetcher)
-      val l2cacheIn = Wire(new SimpleBusUC)
-      prefetcher.io.in <> xbar.io.out.req
-      l2cacheIn.req <> prefetcher.io.out
-      xbar.io.out.resp <> l2cacheIn.resp
-      l2cacheIn
-    } else xbar.io.out
-    val l2Empty = Wire(Bool())
-    l2cacheOut <> Cache(in = l2cacheIn, mmio = 0.U.asTypeOf(new SimpleBusUC) :: Nil, flush = "b00".U, empty = l2Empty, enable = true)(
-      CacheConfig(name = "l2cache", totalSize = 128, cacheLevel = 2))
-    l2cacheOut.coh.resp.ready := true.B
-    l2cacheOut.coh.req.valid := false.B
-    l2cacheOut.coh.req.bits := DontCare
-    l2cacheOut.mem
-  } else {
-    xbar.io.out
-  }*/
   
   val memMapRegionBits = Settings.getInt("MemMapRegionBits")
   val memMapBase = Settings.getLong("MemMapBase")
@@ -117,9 +87,6 @@ class NutShellImp(outer: NutShell) extends LazyModuleImp(outer) with HasNutCoreP
   nutcore.io.imem.coh.resp.ready := true.B
   nutcore.io.imem.coh.req.valid := false.B
   nutcore.io.imem.coh.req.bits := DontCare
-  /*nutcore.io.dmem.coh.resp.ready := true.B
-  nutcore.io.dmem.coh.req.valid := false.B
-  nutcore.io.dmem.coh.req.bits := DontCare*/
 
   val addrSpace = List(
     (Settings.getLong("MMIOBase"), Settings.getLong("MMIOSize")), // external devices

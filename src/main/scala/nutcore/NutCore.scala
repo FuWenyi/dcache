@@ -25,6 +25,7 @@ import bus.axi4._
 import utils._
 import top._
 import chipsalliance.rocketchip.config.Parameters
+import system.HasNutCoreParameters
 
 import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp}
 
@@ -92,10 +93,10 @@ object AddressSpace extends HasNutCoreParameter {
   }).reduce(_ || _)
 }
 
-class NutCore()(implicit p: Parameters) extends LazyModule with HasNutCoreParameter with HasNutCoreConst with HasExceptionNO with HasBackendConst{
+class NutCore()(implicit p: Parameters) extends LazyModule with HasNutCoreParameter with HasNutCoreConst with HasExceptionNO with HasBackendConst with HasNutCoreParameters{
 
   val dcache = LazyModule(new DCache())
-  
+  //Debug() {printf("%d", FPGAPlatform)}
   lazy val module = new NutCoreImp(this)
 }
 

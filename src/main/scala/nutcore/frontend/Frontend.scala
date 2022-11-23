@@ -39,7 +39,7 @@ trait HasFrontendIO {
   val io = IO(new FrontendIO)
 }
 
-class Frontend_ooo(implicit p: Parameters) extends NutCoreModule with HasFrontendIO {
+class Frontend_ooo(implicit val p: Parameters) extends NutCoreModule with HasFrontendIO {
   def pipelineConnect2[T <: Data](left: DecoupledIO[T], right: DecoupledIO[T],
     isFlush: Bool, entries: Int = 4, pipe: Boolean = false) = {
     // NOTE: depend on https://github.com/chipsalliance/chisel3/pull/2245
@@ -72,7 +72,7 @@ class Frontend_ooo(implicit p: Parameters) extends NutCoreModule with HasFronten
 
 }
 
-class Frontend_embedded(implicit p: Parameters) extends NutCoreModule with HasFrontendIO {
+class Frontend_embedded(implicit val p: Parameters) extends NutCoreModule with HasFrontendIO {
   val ifu  = Module(new IFU_embedded)
   val idu  = Module(new IDU)
 
@@ -93,7 +93,7 @@ class Frontend_embedded(implicit p: Parameters) extends NutCoreModule with HasFr
     Debug(idu.io.in(0).valid, "IDU1: pc = 0x%x, instr = 0x%x, pnpc = 0x%x\n", idu.io.in(0).bits.pc, idu.io.in(0).bits.instr, idu.io.in(0).bits.pnpc)
 }
 
-class Frontend_inorder(implicit p: Parameters) extends NutCoreModule with HasFrontendIO {
+class Frontend_inorder(implicit val p: Parameters) extends NutCoreModule with HasFrontendIO {
   val ifu  = Module(new IFU_inorder)
   val ibf = Module(new NaiveRVCAlignBuffer)
   val idu  = Module(new IDU)

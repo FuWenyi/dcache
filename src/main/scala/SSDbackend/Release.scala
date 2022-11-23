@@ -12,7 +12,7 @@ import freechips.rocketchip.tilelink.ClientMetadata
 import chipsalliance.rocketchip.config.Parameters
 import freechips.rocketchip.tilelink.MemoryOpCategories._
 
-class Release(edge: TLEdgeOut)(implicit p: Parameters) extends DCacheModule {
+class Release(edge: TLEdgeOut)(implicit val p: Parameters) extends DCacheModule {
   val io = IO(new Bundle {
     val req = Flipped(Decoupled(new SimpleBusReqBundle(userBits = userBits, idBits = idBits)))
     val release_ok = Output(Bool())
@@ -31,7 +31,7 @@ class Release(edge: TLEdgeOut)(implicit p: Parameters) extends DCacheModule {
   val state = RegInit(s_idle)
 
   val (rel_first, _, rel_done, rel_count) = edge.count(io.mem_release)
-  val rCnt = Mux(state === s_idle || (state === s_releaseD && rel_first && !io.mem_release.fire()), 0.U(WordIndexBits.W), rel_count + 1.U)
+  val rCnt = Mux(state === s_idle || (state === s_releaseD && rel_first && !io.mem_release.fire), 0.U(WordIndexBits.W), rel_count + 1.U)
   
   val isRelAck = io.mem_releaseAck.bits.opcode === TLMessages.ReleaseAck
 
@@ -67,7 +67,7 @@ class Release(edge: TLEdgeOut)(implicit p: Parameters) extends DCacheModule {
       }
     }
     is (s_release) {
-      when (io.mem_release.fire()) {
+      when (io.mem_release.fire) {
         state := s_releaseA
       }
     }
@@ -77,7 +77,7 @@ class Release(edge: TLEdgeOut)(implicit p: Parameters) extends DCacheModule {
       }
     }
     is (s_releaseA) {
-      when (io.mem_releaseAck.fire() && isRelAck) {
+      when (io.mem_releaseAck.fire && isRelAck) {
         state := s_idle
         io.release_ok := true.B
       }

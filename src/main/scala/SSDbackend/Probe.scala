@@ -11,7 +11,7 @@ import freechips.rocketchip.tilelink._
 import freechips.rocketchip.tilelink.ClientMetadata
 import chipsalliance.rocketchip.config.Parameters
 
-class ProbeReq(implicit p: Parameters) extends DCacheBundle{
+class ProbeReq(implicit val p: Parameters) extends DCacheBundle{
   val opcode = UInt()
   val param  = UInt(TLPermissions.bdWidth.W)
   val source = UInt()
@@ -24,7 +24,7 @@ class ProbeReq(implicit p: Parameters) extends DCacheBundle{
   }*/
 }
 
-class Probe(edge: TLEdgeOut)(implicit p: Parameters) extends DCacheModule {
+class Probe(edge: TLEdgeOut)(implicit val p: Parameters) extends DCacheModule {
   val io = IO(new Bundle {
     val mem_probe = Flipped(DecoupledIO(new TLBundleB(edge.bundle)))
     val mem_probeAck = DecoupledIO(new TLBundleC(edge.bundle))
@@ -43,7 +43,7 @@ class Probe(edge: TLEdgeOut)(implicit p: Parameters) extends DCacheModule {
   req.needData := io.mem_probe.bits.data(0)
 
   //reg for req
-  val reqReg = RegEnable(req.asUInt, io.mem_probe.fire()).asTypeOf(new ProbeReq)
+  val reqReg = RegEnable(req.asUInt, io.mem_probe.fire).asTypeOf(new ProbeReq)
   val addr = reqReg.addr.asTypeOf(addrBundle)
 
   //condition machine: s_probePerm|s_probeAck|s_probeBlock|s_probeAckData|   
@@ -51,8 +51,8 @@ class Probe(edge: TLEdgeOut)(implicit p: Parameters) extends DCacheModule {
 
   val state = RegInit(s_idle)
 
-  io.metaReadBus.apply(io.mem_probe.fire() && state === s_idle, setIdx = getMetaIdx(req.addr))
-  io.tagReadBus.apply(io.mem_probe.fire() && state === s_idle, setIdx = getMetaIdx(req.addr))
+  io.metaReadBus.apply(io.mem_probe.fire && state === s_idle, setIdx = getMetaIdx(req.addr))
+  io.tagReadBus.apply(io.mem_probe.fire && state === s_idle, setIdx = getMetaIdx(req.addr))
 
   //refill_count代表c线上refill到第几个了，读应该比它早一拍，比如它在refill第n个时应该读第n+1个
   val (_, _, release_done, refill_count) = edge.count(io.mem_probeAck)
@@ -110,7 +110,7 @@ class Probe(edge: TLEdgeOut)(implicit p: Parameters) extends DCacheModule {
       state := s_probeAD
     }
     is (s_probeA) {
-      when(io.mem_probeAck.fire()) {
+      when(io.mem_probeAck.fire) {
         state := s_idle
       }
     }

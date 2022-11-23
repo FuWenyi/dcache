@@ -34,7 +34,7 @@ import freechips.rocketchip.diplomacy.{AddressSet, LazyModule, LazyModuleImp}
 import top.DefaultConfig
 import chipsalliance.rocketchip.config.Parameters
 
-class SimTop(implicit p: Parameters) extends Module {
+class SimTop(implicit val p: Parameters) extends Module {
   val io = IO(new Bundle{
     val logCtrl = new LogCtrlIO
     val perfInfo = new PerfInfoIO
@@ -50,14 +50,7 @@ class SimTop(implicit p: Parameters) extends Module {
   val xbar = AXI4Xbar()
   xbar := TLToAXI4() := l_soc.l2cache.node := l_soc.nutcore.dcache.clientNode
   xbar := l_soc.imem.node
-  /*val l_simAXIMem = LazyModule(new AXI4RAMWrapper(
-    soc.memAXI4SlaveNode, 128 * 1024 * 1024, useBlockBox = true
-  ))
-  val simAXIMem = Module(l_simAXIMem.module)*/
-  
-  // Be careful with the commit checking of emu.
-  // A large delay will make emu incorrectly report getting stuck.
-  //val memdelay = Module(new AXI4Delayer(0))
+
   val mmio = Module(new SimMMIO)
 
   soc.io.frontend <> mmio.io.dma

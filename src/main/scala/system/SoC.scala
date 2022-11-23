@@ -16,9 +16,9 @@ case class NutCoreParameters (
 
 trait HasNutCoreParameters {
   implicit val p: Parameters
-  val nutcore = p(NutCoreParamsKey)
+  val p_nutcore = p(NutCoreParamsKey)
 
-  val FPGAPlatform = nutcore.FPGAPlatform
+  val FPGAPlatform = p_nutcore.FPGAPlatform
 }
 
 

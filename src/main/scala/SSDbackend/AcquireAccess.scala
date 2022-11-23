@@ -50,14 +50,14 @@ sealed class AcquireAccess(edge: TLEdgeOut)(implicit p: Parameters) extends DCac
   val isGrant = io.mem_grantAck.bits.opcode === TLMessages.Grant || io.mem_grantAck.bits.opcode === TLMessages.GrantData
 
   val newCoh = Mux(hitTag, newPCoh, newBCoh)
-  val metaWrValid = (state === s_grant || (state === s_grantD && grant_first)) && isGrant && io.mem_grantAck.fire()
+  val metaWrValid = (state === s_grant || (state === s_grantD && grant_first)) && isGrant && io.mem_grantAck.fire
   val metaWriteBus = Wire(CacheMetaArrayWriteBus()).apply(
     valid = metaWrValid , setIdx = addr.index, waymask = io.waymask,
     data = Wire(new DMetaBundle).apply(coh = newCoh)
   )
   io.metaWriteBus.req <> metaWriteBus.req
 
-  val dataWrValid = (state === s_grantD || state === s_grant) && isGrant && io.mem_grantAck.fire() 
+  val dataWrValid = (state === s_grantD || state === s_grant) && isGrant && io.mem_grantAck.fire 
   val wordMask = Mux(req.isWrite(), MaskExpand(req.wmask), 0.U(DataBits.W))
   val dataRefill = MaskData(io.mem_grantAck.bits.data, req.wdata, Mux(addr.wordIndex === grant_count, 0.U(DataBits.W), wordMask))
   val wdata = Mux(state === s_grant, req.wdata, dataRefill)
@@ -67,7 +67,7 @@ sealed class AcquireAccess(edge: TLEdgeOut)(implicit p: Parameters) extends DCac
     valid = dataWrValid, setIdx = Cat(addr.index, wordIndex), waymask = io.waymask)
   io.dataWriteBus.req <> dataWriteBus.req
 
-  val tagWrValid = state === s_grantD && isGrant && grant_first && io.mem_grantAck.fire()
+  val tagWrValid = state === s_grantD && isGrant && grant_first && io.mem_grantAck.fire
   val tagWriteBus = Wire(CacheTagArrayWriteBus()).apply(
     valid = tagWrValid, setIdx = addr.index, waymask = io.waymask,
     data = Wire(new DTagBundle).apply(tag = addr.tag)
@@ -126,7 +126,7 @@ sealed class AcquireAccess(edge: TLEdgeOut)(implicit p: Parameters) extends DCac
       s_put -> putFullData.asUInt
     ))
 
-  val sinkD = RegEnable(io.mem_grantAck.bits.sink, io.mem_grantAck.fire())
+  val sinkD = RegEnable(io.mem_grantAck.bits.sink, io.mem_grantAck.fire)
   val grantAck = edge.GrantAck(
     toSink = sinkD
   )
@@ -147,37 +147,37 @@ sealed class AcquireAccess(edge: TLEdgeOut)(implicit p: Parameters) extends DCac
       }
     }
     is (s_put) {
-      when (io.mem_getPutAcquire.fire()) {
+      when (io.mem_getPutAcquire.fire) {
         state := s_accessA
       }
     }
     is (s_accessA) {
-      when (io.mem_grantAck.fire()) {
+      when (io.mem_grantAck.fire) {
         state := s_waitResp
       }
     }
     is (s_get) {
-      when (io.mem_getPutAcquire.fire()) {
+      when (io.mem_getPutAcquire.fire) {
         state := s_accessAD
       }
     }
     is (s_accessAD) {
-      when (io.mem_grantAck.fire()) {
+      when (io.mem_grantAck.fire) {
         state := s_waitResp
       }      
     }
     is (s_acqP) {
-      when (io.mem_getPutAcquire.fire()) {
+      when (io.mem_getPutAcquire.fire) {
         state := s_grant
       }      
     }
     is (s_grant) {
-      when (io.mem_grantAck.fire() && isGrant) {
+      when (io.mem_grantAck.fire && isGrant) {
         state := s_grantA
       }      
     }
     is (s_acqB) {
-      when (io.mem_getPutAcquire.fire()) {
+      when (io.mem_getPutAcquire.fire) {
         state := s_grantD
       }      
     }
@@ -187,12 +187,12 @@ sealed class AcquireAccess(edge: TLEdgeOut)(implicit p: Parameters) extends DCac
       }      
     }
     is (s_grantA) {
-      when (io.mem_finish.fire()) {
+      when (io.mem_finish.fire) {
         state := s_waitResp
       }      
     }
     is (s_waitResp) {
-      when (io.resp.fire()) {
+      when (io.resp.fire) {
         state := s_idle
       }      
     }
@@ -200,7 +200,7 @@ sealed class AcquireAccess(edge: TLEdgeOut)(implicit p: Parameters) extends DCac
 
   io.req.ready := io.resp.ready && state === s_idle
 
-  val rData = RegEnable(io.mem_grantAck.bits.data, isGrant && io.mem_grantAck.fire() && (state === s_accessAD || (state === s_grantD && addr.index === grant_count)))
+  val rData = RegEnable(io.mem_grantAck.bits.data, isGrant && io.mem_grantAck.fire && (state === s_accessAD || (state === s_grantD && addr.index === grant_count)))
   io.resp.valid := io.req.valid && state === s_waitResp
   io.resp.bits.rdata := rData
 }

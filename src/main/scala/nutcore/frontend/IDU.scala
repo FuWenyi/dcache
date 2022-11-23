@@ -158,7 +158,7 @@ class Decoder(implicit p: Parameters) extends NutCoreModule with HasInstrType {
 
 }
 
-class IDU(implicit p: Parameters) extends NutCoreModule with HasInstrType with HasNutCoreParameters {
+class IDU(implicit val p: Parameters) extends NutCoreModule with HasInstrType with HasNutCoreParameters {
   val io = IO(new Bundle {
     val in = Vec(4, Flipped(Decoupled(new CtrlFlowIO)))
     val out = Vec(4, Decoupled(new DecodeIO))
