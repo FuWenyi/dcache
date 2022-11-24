@@ -30,7 +30,7 @@ import system._
 
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.diplomacy.{IdRange, LazyModule, LazyModuleImp, TransferSizes}
-import freechips.rocketchip.tilelink.ClientMetadata
+import freechips.rocketchip.tilelink.{ClientMetadata, ClientStates}
 import chipsalliance.rocketchip.config.{Field, Parameters}
 import freechips.rocketchip.rocket.constants.MemoryOpConstants
 import freechips.rocketchip.tilelink.MemoryOpCategories._
@@ -106,10 +106,10 @@ class DTagBundle(implicit val p: Parameters) extends DCacheBundle {
 }
 
 class DMetaBundle(implicit val p: Parameters) extends DCacheBundle {
-  val coh = new ClientMetadata
+  val coh = Output(UInt(ClientStates.width.W))
 
   def apply(coh: ClientMetadata) = {
-    this.coh := coh
+    this.coh := coh.asUInt
     this
   }
 }
@@ -179,7 +179,7 @@ sealed class DCacheStage1(implicit val p: Parameters) extends DCacheModule {
 
 // check
 sealed class DCacheStage2(edge: TLEdgeOut)(implicit val p: Parameters) extends DCacheModule {
-  class SSDCacheStage2IO(edge: TLEdgeOut) extends Bundle {
+  /*class DCacheStage2IO(edge: TLEdgeOut) extends Bundle {
     val in = Flipped(Decoupled(new DStage1IO))
     val out = Decoupled(new SimpleBusRespBundle(userBits = userBits, idBits = idBits))
     val flush = Input(Bool())
@@ -198,7 +198,25 @@ sealed class DCacheStage2(edge: TLEdgeOut)(implicit val p: Parameters) extends D
     val mem_release = DecoupledIO(new TLBundleC(edge.bundle))    
   }
 
-  val io = IO(new SSDCacheStage2IO(edge))
+  val io = IO(new DCacheStage2IO(edge))*/
+  val io = IO(new Bundle {
+    val in = Flipped(Decoupled(new DStage1IO))
+    val out = Decoupled(new SimpleBusRespBundle(userBits = userBits, idBits = idBits))
+    val flush = Input(Bool())
+    val metaReadResp = Flipped(Vec(Ways, new DMetaBundle))
+    val tagReadResp = Flipped(Vec(Ways, new DTagBundle))
+    val dataReadResp = Flipped(Vec(Ways, new DDataBundle))
+
+    val dataReadBus = CacheDataArrayReadBus()
+    val metaWriteBus = CacheMetaArrayWriteBus()
+    val dataWriteBus = CacheDataArrayWriteBus()
+    val tagWriteBus = CacheTagArrayWriteBus()
+
+    val mem_getPutAcquire = DecoupledIO(new TLBundleA(edge.bundle))
+    val mem_grantReleaseAck = Flipped(DecoupledIO(new TLBundleD(edge.bundle)))
+    val mem_finish = DecoupledIO(new TLBundleE(edge.bundle))
+    val mem_release = DecoupledIO(new TLBundleC(edge.bundle))    
+  })
   
   //hit miss check
   val metaWay = io.metaReadResp
@@ -254,7 +272,7 @@ sealed class DCacheStage2(edge: TLEdgeOut)(implicit val p: Parameters) extends D
   acquireAccess.io.mem_getPutAcquire <> io.mem_getPutAcquire
   acquireAccess.io.mem_grantAck <> io.mem_grantReleaseAck
   acquireAccess.io.mem_finish <> io.mem_finish
-  acquireAccess.io.req := req
+  acquireAccess.io.req.bits := req
   acquireAccess.io.req.valid := miss || (io.in.bits.mmio && io.in.valid)
   acquireAccess.io.req.bits.wdata := Mux(hitTag, dataMasked, io.in.bits.req.wdata)
   acquireAccess.io.isMMIO := io.in.bits.mmio
@@ -269,15 +287,15 @@ sealed class DCacheStage2(edge: TLEdgeOut)(implicit val p: Parameters) extends D
   val metaWriteArb = Module(new Arbiter(CacheMetaArrayWriteBus().req.bits, 2))
   val dataWriteArb = Module(new Arbiter(CacheDataArrayWriteBus().req.bits, 2))
 
-  dataWriteArb.io.in(0) <> dataHitWriteBus
-  dataWriteArb.io.in(1) <> acquireAccess.io.dataWriteBus
+  dataWriteArb.io.in(0) <> dataHitWriteBus.req
+  dataWriteArb.io.in(1) <> acquireAccess.io.dataWriteBus.req
   io.dataWriteBus.req <> dataWriteArb.io.out
 
-  metaWriteArb.io.in(0) <> metaHitWriteBus
-  metaWriteArb.io.in(1) <> acquireAccess.io.metaWriteBus
+  metaWriteArb.io.in(0) <> metaHitWriteBus.req
+  metaWriteArb.io.in(1) <> acquireAccess.io.metaWriteBus.req
   io.metaWriteBus.req <> metaWriteArb.io.out
 
-  io.tagWriteBus.req <> acquireAccess.io.tagWriteBus
+  io.tagWriteBus.req <> acquireAccess.io.tagWriteBus.req
 
     //core modules: release
     //only miss but not hittag
@@ -288,7 +306,7 @@ sealed class DCacheStage2(edge: TLEdgeOut)(implicit val p: Parameters) extends D
   val victimCoh = Mux1H(waymask, metaWay).coh.asTypeOf(new ClientMetadata)
   val vicAddr = Cat(Mux1H(waymask, tagWay).tag, addr.index, 0.U(6.W))
   
-  release.io.req := req
+  release.io.req.bits := req
   release.io.req.valid := needRel     //choose victim
   release.io.req.bits.addr := vicAddr
   release.io.mem_release <> io.mem_release
@@ -303,7 +321,7 @@ sealed class DCacheStage2(edge: TLEdgeOut)(implicit val p: Parameters) extends D
   when (io.out.fire) {isrelDone := false.B}
   val relOK = !needRel || (needRel && isrelDone)
   
-  io.out := acquireAccess.io.resp
+  io.out <> acquireAccess.io.resp
   io.out.valid := io.in.valid && (hit || (miss && acquireAccess.io.resp.valid && relOK)) 
   io.out.bits.rdata := Mux(hit, dataRead, acquireAccess.io.resp.bits.rdata)
   io.in.ready := io.out.ready
@@ -317,6 +335,9 @@ class DCache()(implicit p: Parameters) extends LazyModule with HasNutCoreParamet
       name = "dcache",
       sourceId = IdRange(0, 1 << srcBits),
       supportsProbe = TransferSizes(LineSize)
+      //supportsGet = TransferSizes(LineSize),
+      //supportsPutFull = TransferSizes(LineSize),
+      //supportsPutPartial = TransferSizes(LineSize)
     )),
     requestFields = Seq(),
     echoFields = Seq()
@@ -340,7 +361,7 @@ class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheIO wit
   //meta 
   val tagArray = Module(new MetaSRAMTemplateWithArbiter(nRead = 2, new DTagBundle, set = Sets, way = Ways, shouldReset = true))
   val metaArray = Module(new MetaSRAMTemplateWithArbiter(nRead = 2, new DMetaBundle, set = Sets, way = Ways, shouldReset = true))
-  val dataArray = Module(new SRAMTemplateWithArbiter(nRead = 3, new DDataBundle, set = Sets * LineBeats, way = Ways))
+  val dataArray = Module(new DataSRAMTemplateWithArbiter(nRead = 3, new DDataBundle, set = Sets * LineBeats, way = Ways))
 //  val metaArray = Module(new MetaSRAMTemplateWithArbiter(nRead = 1, new MetaBundle, set = Sets, way = Ways, shouldReset = true))
 //  val dataArray = Module(new DataSRAMTemplateWithArbiter(nRead = 2, new DataBundle, set = Sets * LineBeats, way = Ways))
 
@@ -354,7 +375,8 @@ class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheIO wit
   s2.io.mem_release <> bus.c
   s2.io.mem_grantReleaseAck <> bus.d 
   s2.io.mem_finish <> bus.e 
-  
+
+  //DontCare <> bus.b  
   //probe.mem_probe <> bus.b
   //probe.mem_probeAck <> bus.c
   
@@ -376,29 +398,19 @@ class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheIO wit
   tagArray.io.r(0) <> s1.io.tagReadBus
   //tagArray.io.r(1) <> probe.io.tagReadBus
 
-  val metaWriteArb = Module(new Arbiter(CacheMetaArrayWriteBus().req.bits, 2))
-  val dataWriteArb = Module(new Arbiter(CacheDataArrayWriteBus().req.bits, 2))
-  metaWriteArb.io.in(0) <> s2.io.metaWriteBus
+  //val metaWriteArb = Module(new Arbiter(CacheMetaArrayWriteBus().req.bits, 2))
+  //val dataWriteArb = Module(new Arbiter(CacheDataArrayWriteBus().req.bits, 2))
+  //metaWriteArb.io.in(0) <> s2.io.metaWriteBus
   //metaWriteArb.io.in(1) <> probe.io.metaWriteBus
-  metaArray.io.w <> metaWriteArb.io.out
+  //metaArray.io.w <> metaWriteArb.io.out
+  metaArray.io.w <> s2.io.metaWriteBus
   //dataWriteArb.io.in(0) <> probe.io.dataWriteBus
-  dataWriteArb.io.in(1) <> s2.io.dataWriteBus
-  dataArray.io.w <> dataWriteArb.io.out
+  //dataWriteArb.io.in(1) <> s2.io.dataWriteBus
+  //dataArray.io.w <> dataWriteArb.io.out
+  dataArray.io.w <> s2.io.dataWriteBus
   tagArray.io.w <> s2.io.tagWriteBus
 
   s2.io.metaReadResp := s1.io.metaReadBus.resp.data
   s2.io.tagReadResp := s1.io.tagReadBus.resp.data
   s2.io.dataReadResp := s1.io.dataReadBus.resp.data
 }
-
-
-/*object SSDCache {
-  def apply(in: SimpleBusUC, mmio: SimpleBusUC, flush: Bool)(implicit cacheConfig: SSDCacheConfig) = {
-    val cache = Module(new SSDCache)
-
-    cache.io.flush := flush
-    cache.io.in <> in
-    mmio <> cache.io.mmio
-    cache.io.out
-  }
-}*/

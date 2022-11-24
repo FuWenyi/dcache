@@ -55,7 +55,8 @@ class NutShell()(implicit p: Parameters) extends LazyModule {
   val nutcore = LazyModule(new NutCore())
   val l2cache = LazyModule(new HuanCun())
   val imem = LazyModule(new SB2AXI4MasterNode(true))
-  //memAXI4SlaveNode := TLToAXI4() := l2cache.node := nutcore.dcache.clientNode
+  val dmemory_port = TLIdentityNode()
+  dmemory_port := l2cache.node := nutcore.dcache.clientNode
   lazy val module = new NutShellImp(this)
 }
 

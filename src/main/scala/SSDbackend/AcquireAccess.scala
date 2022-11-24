@@ -16,8 +16,8 @@ sealed class AcquireAccess(edge: TLEdgeOut)(implicit val p: Parameters) extends 
     val isMMIO = Input(Bool())
     val req = Flipped(Decoupled(new SimpleBusReqBundle(userBits = userBits, idBits = idBits)))
     val resp = Decoupled(new SimpleBusRespBundle(userBits = userBits, idBits = idBits))    //out to cpu, corresponding to req
-    val mem_getPutAcquire = Flipped(DecoupledIO(new TLBundleA(edge.bundle)))
-    val mem_grantAck = DecoupledIO(new TLBundleD(edge.bundle))
+    val mem_getPutAcquire = DecoupledIO(new TLBundleA(edge.bundle))
+    val mem_grantAck = Flipped(DecoupledIO(new TLBundleD(edge.bundle)))
     val mem_finish = DecoupledIO(new TLBundleE(edge.bundle))
     val waymask = Input(UInt(Ways.W))
     val hitTag = Input(Bool())
@@ -88,7 +88,7 @@ sealed class AcquireAccess(edge: TLEdgeOut)(implicit val p: Parameters) extends 
   val idPutGet = 0.U(srcBits.W)
   val idAcquire = 1.U(srcBits.W)
 
-  val putFullData = edge.Put(
+  /*val putFullData = edge.Put(
     fromSource = idPutGet,
     toAddress = req.addr,
     lgSize = req.size,
@@ -104,7 +104,7 @@ sealed class AcquireAccess(edge: TLEdgeOut)(implicit val p: Parameters) extends 
   val get = edge.Get(
     fromSource = idPutGet,
     toAddress = req.addr,
-    lgSize = req.size)._2
+    lgSize = req.size)._2*/
 
   val acquireBlock = edge.AcquireBlock(
     fromSource = idAcquire, 
@@ -119,17 +119,27 @@ sealed class AcquireAccess(edge: TLEdgeOut)(implicit val p: Parameters) extends 
     growPermissions = acParam)._2
 
   val isFullPut = genWmask(req.size) === req.wmask
-  val pkg = LookupTree(state, List(
+  /*val pkg = LookupTree(state, List(
       s_get -> get.asUInt,
       s_acqB -> acquireBlock.asUInt, 
       s_acqP -> acquirePerm.asUInt, 
       s_put -> putFullData.asUInt
+    ))*/
+  val pkg = LookupTree(state, List(
+      //s_get -> get.asUInt,
+      s_acqB -> acquireBlock.asUInt, 
+      s_acqP -> acquirePerm.asUInt 
+      //s_put -> putFullData.asUInt
     ))
 
   val sinkD = RegEnable(io.mem_grantAck.bits.sink, io.mem_grantAck.fire)
   val grantAck = edge.GrantAck(
     toSink = sinkD
   )
+
+  //xxxxxxxx
+  val putPartialData = acquireBlock
+  val putFullData = acquireBlock
 
   io.mem_getPutAcquire.valid := Mux(state === s_put || state === s_get || state === s_acqB || state === s_acqP, true.B, false.B)
   io.mem_getPutAcquire.bits := Mux(state === s_put, Mux(isFullPut, putFullData, putPartialData), pkg.asTypeOf(new TLBundleA(edge.bundle)))

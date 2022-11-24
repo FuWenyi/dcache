@@ -16,8 +16,8 @@ class Release(edge: TLEdgeOut)(implicit val p: Parameters) extends DCacheModule 
   val io = IO(new Bundle {
     val req = Flipped(Decoupled(new SimpleBusReqBundle(userBits = userBits, idBits = idBits)))
     val release_ok = Output(Bool())
-    val mem_release = Flipped(DecoupledIO(new TLBundleC(edge.bundle)))
-    val mem_releaseAck = DecoupledIO(new TLBundleD(edge.bundle))
+    val mem_release = DecoupledIO(new TLBundleC(edge.bundle))
+    val mem_releaseAck = Flipped(DecoupledIO(new TLBundleD(edge.bundle)))
     val victimCoh = Input(new ClientMetadata)
     val waymask = Input(UInt(Ways.W))
     val dataReadBus = CacheDataArrayReadBus()

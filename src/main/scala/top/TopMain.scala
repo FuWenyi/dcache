@@ -79,11 +79,10 @@ object TopMain extends App {
   val config = new DefaultConfig(false)
 
   if (board == "sim") {
-    //val soc = DisableMonitors(p => new SimTop()(p))(config)
-    Generator.execute(args, DisableMonitors(p => new SimTop()(p))(config))
-    /*(new ChiselStage).execute(args, Seq(
-      ChiselGeneratorAnnotation((p => new SimTop()(p))(config)))
-    )*/
+    //Generator.execute(args, DisableMonitors(p => new SimTop()(p))(config))
+    (new ChiselStage).execute(args, Seq(
+      ChiselGeneratorAnnotation(DisableMonitors(p => LazyModule(new SimTop()(p)))(config).module _))
+    )
   } else {
     (new ChiselStage).execute(args, Seq(
       ChiselGeneratorAnnotation(() => new Top))
