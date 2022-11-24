@@ -29,6 +29,8 @@ import freechips.rocketchip.tilelink._
 import chipsalliance.rocketchip.config.Parameters
 import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp}
 import utils._
+import huancun._
+import chipsalliance.rocketchip.config._
 //import freechips.rocketchip.diplomacy.{AddressSet, LazyModule, LazyModuleImp}
 
 import chisel3._
@@ -51,9 +53,24 @@ class ILABundle extends NutCoreBundle {
 }
 
 class NutShell()(implicit p: Parameters) extends LazyModule {
-  //val nutcore = LazyModule(new NutCore())
   val nutcore = LazyModule(new NutCore())
-  val l2cache = LazyModule(new HuanCun())
+  //val l2cache = LazyModule(new HuanCun())
+  /*private val l2cache = coreParams.L2CacheParamsOpt.map(l2param =>
+    LazyModule(new HuanCun()(new Config((_, _, _) => {
+      case HCCacheParamsKey => l2param.copy(enableTopDown = env.EnableTopDown)
+    })))
+  )*/
+  val l2cache = LazyModule(new HuanCun()(new Config((_, _, _) => {
+    case HCCacheParamsKey => HCCacheParameters(
+      name = s"L2",
+      level = 2,
+      inclusive = false,
+      clientCaches = Seq(CacheParameters(sets = 32, ways = 8, blockGranularity = 5, name = "L2")),
+      prefetch = Some(huancun.prefetch.BOPParameters()),
+      reqField = Seq(),
+      echoField = Seq()
+    )
+  })))
   val imem = LazyModule(new SB2AXI4MasterNode(true))
   val dmemory_port = TLIdentityNode()
   dmemory_port := l2cache.node := nutcore.dcache.clientNode
