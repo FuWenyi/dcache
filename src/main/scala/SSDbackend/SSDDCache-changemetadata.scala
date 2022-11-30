@@ -78,12 +78,14 @@ trait HasDCacheParameters {
   def addrBundle = new Bundle {
     val tag = UInt(TagBits.W)
     val index = UInt(IndexBits.W)
-    val wordIndex = UInt(WordIndexBits.W - BankBits.W)
+    val wordIndex = UInt((WordIndexBits - BankBits).W)
     val bankIndex = UInt(BankBits.W)
     val byteOffset = UInt((if (XLEN == 64) 3 else 2).W)
   }
 
-  def BankHitVec(addr: UInt) = (0 until sramNum).map{m => m === getbankIdx(addr)}.asUInt
+  def BankHitVec(addr: UInt) : UInt = {
+    VecInit((0 until sramNum).map{m => m.U === getbankIdx(addr)}).asUInt
+  }
 
   def CacheMetaArrayReadBus() = new SRAMReadBus(new DMetaBundle, set = Sets, way = Ways)
   def CacheTagArrayReadBus() = new SRAMReadBus(new DTagBundle, set = Sets, way = Ways)
@@ -168,21 +170,22 @@ sealed class DCacheStage1(implicit val p: Parameters) extends DCacheModule {
   io.metaReadBus.apply(valid = readBusValid, setIdx = getMetaIdx(io.in.bits.addr))
   io.tagReadBus.apply(valid = readBusValid, setIdx = getMetaIdx(io.in.bits.addr))
   for (w <- 0 until sramNum) {
-    io.dataReadBus(w).apply(valid = w === getbankIdx(io.in.bits.addr), setIdx = getDataIdx(io.in.bits.addr))
+    io.dataReadBus(w).apply(valid = w.U === getbankIdx(io.in.bits.addr), setIdx = getDataIdx(io.in.bits.addr))
   }
 
   //metaArray need to reset before Load
   //s1 is not ready when metaArray is resetting or meta/dataArray is being written
 
-  if(cacheName == "dcache") {
+  /*if(cacheName == "dcache") {
     val s1NotReady = (!io.metaReadBus.req.ready || !io.dataReadBus.req.ready || !io.metaReadBus.req.ready || !io.tagReadBus.req.ready)&& io.in.valid
     BoringUtils.addSource(s1NotReady,"s1NotReady")
-  }
+  }*/
 
+  val dataReadBusReady = VecInit(io.dataReadBus.map(_.req.ready)).asUInt.andR
   io.out.bits.req := io.in.bits
   io.out.bits.req.cmd := new_cmd
-  io.out.valid := io.in.valid && io.metaReadBus.req.ready && io.dataReadBus.req.ready && io.tagReadBus.req.ready
-  io.in.ready := io.out.ready && io.metaReadBus.req.ready && io.dataReadBus.req.ready && io.tagReadBus.req.ready
+  io.out.valid := io.in.valid && io.metaReadBus.req.ready && dataReadBusReady && io.tagReadBus.req.ready
+  io.in.ready := io.out.ready && io.metaReadBus.req.ready && dataReadBusReady && io.tagReadBus.req.ready
   io.out.bits.mmio := AddressSpace.isMMIO(io.in.bits.addr)
 }
 
@@ -219,7 +222,7 @@ sealed class DCacheStage2(edge: TLEdgeOut)(implicit val p: Parameters) extends D
 
     val dataReadBus = Vec(sramNum, CacheDataArrayReadBus())
     val metaWriteBus = CacheMetaArrayWriteBus()
-    val dataWriteBus = CacheDataArrayWriteBus()
+    val dataWriteBus = Vec(sramNum, CacheDataArrayWriteBus())
     val tagWriteBus = CacheTagArrayWriteBus()
 
     val mem_getPutAcquire = DecoupledIO(new TLBundleA(edge.bundle))
@@ -269,14 +272,14 @@ sealed class DCacheStage2(edge: TLEdgeOut)(implicit val p: Parameters) extends D
 
     //cmd write: write data to cache
   val bankHitVec = BankHitVec(req.addr)
-  val hitBank = Mux1H(bankHitVec, io.dataReadBus.Resp)
+  val hitBank = Mux1H(bankHitVec, io.dataReadBus).resp.data
   val dataRead = Mux1H(waymask, hitBank).data
   val dataMasked = MaskData(dataRead, req.wdata, wordMask)
   val dataHitWriteBus = Wire(Vec(sramNum, CacheDataArrayWriteBus()))
   for (w <- 0 until sramNum) {
     dataHitWriteBus(w).apply(
       data = Wire(new DDataBundle).apply(dataMasked),
-      valid = hitWrite && w === addr.bankIndex, setIdx = Cat(addr.index, addr.wordIndex), waymask = waymask)
+      valid = hitWrite && w.U === addr.bankIndex, setIdx = Cat(addr.index, addr.wordIndex), waymask = waymask)
   }
   /*val dataHitWriteBus = Wire(CacheDataArrayWriteBus()).apply(
     data = Wire(new DDataBundle).apply(dataMasked),
@@ -310,7 +313,9 @@ sealed class DCacheStage2(edge: TLEdgeOut)(implicit val p: Parameters) extends D
     dataWriteArb(w).io.in(1) <> acquireAccess.io.dataWriteBus(w).req
   }
   //io.dataWriteBus.req <> dataWriteArb.io.out
-  (io.dataWriteBus zip dataWriteArb).map{case (b, a) => (b.req <> a.io.out)}
+  for (w <- 0 until sramNum) {
+    io.dataWriteBus(w).req <> dataWriteArb(w).io.out
+  }
 
   metaWriteArb.io.in(0) <> metaHitWriteBus.req
   metaWriteArb.io.in(1) <> acquireAccess.io.metaWriteBus.req
@@ -373,6 +378,7 @@ class DCache()(implicit p: Parameters) extends LazyModule with HasNutCoreParamet
 class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheIO with HasNutCoreParameter with HasDCacheParameters with HasNutCoreParameters{ 
 
   val (bus, edge) = outer.clientNode.out.head
+  require(bus.params.dataBits == 256)
   // cache pipeline
   val s1 = Module(new DCacheStage1)
   val s2 = Module(new DCacheStage2(edge))

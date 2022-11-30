@@ -58,21 +58,21 @@ sealed class AcquireAccess(edge: TLEdgeOut)(implicit val p: Parameters) extends 
   io.metaWriteBus.req <> metaWriteBus.req
 
   //val dataWrValid = (state === s_grantD || state === s_grant) && isGrant && io.mem_grantAck.fire 
-  val isGrantData = state === s_grantD && isGrant && io.mem_grantAck.fire 
-  val isGrant = state === s_grant && isGrant && io.mem_grantAck.fire
+  val isFullData = state === s_grantD && isGrant && io.mem_grantAck.fire 
+  val isOneData = state === s_grant && isGrant && io.mem_grantAck.fire
   val wordMask = Mux(req.isWrite(), MaskExpand(req.wmask), 0.U(DataBits.W))
   val dataRefill = Wire(Vec(sramNum, UInt(XLEN.W)))
   for (w <- 0 until sramNum) {
-    dataRefill(w) = MaskData(io.mem_grantAck.bits.data((w + 1) << XLEN, w << XLEN), req.wdata, Mux(addr.wordIndex === grant_count && addr.bankIndex === w, wordMask, 0.U(DataBits.W)))
+    dataRefill(w) := MaskData(io.mem_grantAck.bits.data((w + 1) << XLEN, w << XLEN), req.wdata, Mux(addr.wordIndex === grant_count && addr.bankIndex === w.U, wordMask, 0.U(DataBits.W)))
   }
   //val dataRefill = MaskData(io.mem_grantAck.bits.data, req.wdata, Mux(addr.wordIndex === grant_count, 0.U(DataBits.W), wordMask))
-  val wdata = Vec(dataRefill.map(d => Mux(state === s_grant, req.wdata, d)))
+  val wdata = dataRefill.map{Mux(state === s_grant, req.wdata, _)}
   //val wdata = Mux(state === s_grant, req.wdata, dataRefill)
   val wordIndex = Mux(state === s_grant, addr.wordIndex, grant_count)
   for (w <- 0 until sramNum) {
     io.dataWriteBus(w).apply(
       data = Wire(new DDataBundle).apply(wdata(w)),
-      valid = isGrantData || (isGrant && addr.wordIndex === grant_count && addr.bankIndex === w), setIdx = Cat(addr.index, wordIndex), waymask = io.waymask)
+      valid = isFullData || (isOneData && addr.wordIndex === grant_count && addr.bankIndex === w.U), setIdx = Cat(addr.index, wordIndex), waymask = io.waymask)
   }
   /*val dataWriteBus = Wire(CacheDataArrayWriteBus()).apply(
     data = Wire(new DDataBundle).apply(wdata),
@@ -224,9 +224,9 @@ sealed class AcquireAccess(edge: TLEdgeOut)(implicit val p: Parameters) extends 
 
   val dataRead = Wire(Vec(sramNum, UInt(XLEN.W)))
   for (w <- 0 until sramNum) {
-    dataRead(w) = io.mem_grantAck.bits.data((w + 1) << XLEN, w << XLEN)
+    dataRead(w) := io.mem_grantAck.bits.data((w + 1) << XLEN, w << XLEN)
   }
-  val bankHitVec = BankHitVec(addr)
+  val bankHitVec = BankHitVec(addr.asUInt)
   val rData = RegEnable(Mux1H(bankHitVec, dataRead), isGrant && io.mem_grantAck.fire && (state === s_accessAD || (state === s_grantD && addr.wordIndex === grant_count)))
   io.resp.valid := io.req.valid && state === s_waitResp
   io.resp.bits.rdata := rData

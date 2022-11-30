@@ -41,9 +41,9 @@ class Release(edge: TLEdgeOut)(implicit val p: Parameters) extends DCacheModule 
   }
 
   //val dataWay = io.dataReadBus.resp.data
-  val dataWay = Vec(io.dataReadBus.map(x => x.resp.data))
+  val dataWay = io.dataReadBus.map(_.resp.data)
   //val rData = Mux1H(io.waymask, dataWay).data
-  val rData = Vec(dataWay.map(d => Mux1H(io.waymask, d).data)).asUInt
+  val rData = VecInit(dataWay.map(Mux1H(io.waymask, _).data)).asUInt
 
   val victimCoh = io.victimCoh
   val (release_has_dirty_data, release_shrink_param, release_new_coh) = victimCoh.onCacheControl(M_FLUSH)
