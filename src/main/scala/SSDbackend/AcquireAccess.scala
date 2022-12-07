@@ -230,4 +230,5 @@ sealed class AcquireAccess(edge: TLEdgeOut)(implicit val p: Parameters) extends 
   val rData = RegEnable(Mux1H(bankHitVec, dataRead), isGrant && io.mem_grantAck.fire && (state === s_accessAD || (state === s_grantD && addr.wordIndex === grant_count)))
   io.resp.valid := io.req.valid && state === s_waitResp
   io.resp.bits.rdata := rData
+  io.resp.bits.cmd := SimpleBusCmd.readBurst
 }

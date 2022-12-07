@@ -23,12 +23,15 @@ class Release(edge: TLEdgeOut)(implicit val p: Parameters) extends DCacheModule 
     val dataReadBus = Vec(sramNum, CacheDataArrayReadBus())
   })    
 
+  
   val req = io.req.bits
   val addr = req.addr.asTypeOf(addrBundle)
 
   //condition machine: release| releaseData| releaseAck
   val s_idle :: s_release :: s_releaseD :: s_releaseA :: Nil = Enum(4)
   val state = RegInit(s_idle)
+  
+  io.req.ready := state === s_idle
 
   val (rel_first, _, rel_done, rel_count) = edge.count(io.mem_release)
   val rCnt = Mux(state === s_idle || (state === s_releaseD && rel_first && !io.mem_release.fire), 0.U(WordIndexBits.W), rel_count + 1.U)

@@ -387,13 +387,13 @@ class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheIO wit
   //val probe = Module(new Probe(edge))
 
   //meta 
-  val tagArray = Module(new MetaSRAMTemplateWithArbiter(nRead = 2, new DTagBundle, set = Sets, way = Ways, shouldReset = true))
-  val metaArray = Module(new MetaSRAMTemplateWithArbiter(nRead = 2, new DMetaBundle, set = Sets, way = Ways, shouldReset = true))
+  val tagArray = Module(new MetaSRAMTemplateWithArbiter(nRead = 1, new DTagBundle, set = Sets, way = Ways, shouldReset = true))
+  val metaArray = Module(new MetaSRAMTemplateWithArbiter(nRead = 1, new DMetaBundle, set = Sets, way = Ways, shouldReset = true))
   //val dataArray = Module(new DataSRAMTemplateWithArbiter(nRead = 3, new DDataBundle, set = Sets * LineBeats, way = Ways))
 
   val dataArray = Array.fill(sramNum) {
     Module(new DataSRAMTemplateWithArbiter(
-      nRead = 3,
+      nRead = 2,
       new DDataBundle,
       set = Sets * LineBeats / sramNum,
       way = Ways
@@ -434,7 +434,7 @@ class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheIO wit
     dataArray(w).io.r(0) <> s1.io.dataReadBus(w)
   }
   for (w <- 0 until sramNum) {
-    dataArray(w).io.r(0) <> s2.io.dataReadBus(w)
+    dataArray(w).io.r(1) <> s2.io.dataReadBus(w)
   }
   //dataArray.io.r(2) <> probe.io.dataReadBus
   tagArray.io.r(0) <> s1.io.tagReadBus

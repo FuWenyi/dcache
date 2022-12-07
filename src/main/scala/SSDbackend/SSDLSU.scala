@@ -121,10 +121,10 @@ class SSDLSU extends  NutCoreModule with HasStoreBufferConst{
   MMIOStorePkt.bits := outBuffer.io.deq.bits
   MMIOStorePkt.valid := outBuffer.io.deq.valid
   MMIOStorePkt.ready := false.B
-  BoringUtils.addSource(MMIOStorePkt.valid,"MMIOStorePktValid")
-  BoringUtils.addSource(MMIOStorePkt.bits,"MMIOStorePktBits")
-  BoringUtils.addSink(MMIOStorePkt.ready,"MMIOStorePktReady")
-  BoringUtils.addSource(MMIOStorePending,"MMIOStorePending")
+  //BoringUtils.addSource(MMIOStorePkt.valid,"MMIOStorePktValid")
+  //BoringUtils.addSource(MMIOStorePkt.bits,"MMIOStorePktBits")
+  //BoringUtils.addSink(MMIOStorePkt.ready,"MMIOStorePktReady")
+  //BoringUtils.addSource(MMIOStorePending,"MMIOStorePending")
 
   //stall signal
   val cacheStall = WireInit(false.B)
@@ -310,7 +310,7 @@ class SSDLSU extends  NutCoreModule with HasStoreBufferConst{
   val hitDataE3 = Mux(addrHitE3,mergedDataE3,io.dmem.resp.bits.rdata)
   dontTouch(addrHitE3)
   dontTouch(hitDataE3)
-  BoringUtils.addSource(addrHitE3,"storeHit")
+  //BoringUtils.addSource(addrHitE3,"storeHit")
 
   val rdataSel = LookupTree(addrE3(2, 0), List(
     "b000".U -> hitDataE3(63, 0),

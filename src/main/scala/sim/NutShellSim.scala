@@ -40,7 +40,7 @@ class SimTop(implicit p: Parameters) extends LazyModule {
   val l_soc = LazyModule(new NutShell())
   
   //val mem = LazyModule(new AXI4RAM(memByte = 128 * 1024 * 1024, useBlackBox = true))
-  val mem = LazyModule(new AXI4RAM(AddressSet(0x80000000L, 0x7ffffffL)))     //128MB
+  val mem = LazyModule(new AXI4RAM(AddressSet(0x80000000L, 0x7ffffffL), beatBytes = 32))     //128MB
   
   val xbar = AXI4Xbar()
   
@@ -56,8 +56,8 @@ class SimTop(implicit p: Parameters) extends LazyModule {
       val uart = new UARTIO
     })
 
-    val soc = Module(l_soc.module)
     val mmio = Module(new SimMMIO)
+    val soc = l_soc.module
 
     soc.io.frontend <> mmio.io.dma
 
