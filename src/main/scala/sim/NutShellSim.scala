@@ -28,55 +28,55 @@ import chisel3.util.experimental.BoringUtils
 import nutcore._
 import utils.GTimer
 import difftest._
-import freechips.rocketchip.amba.axi4.{AXI4Xbar, AXI4Delayer, AXI4RAM}
+import freechips.rocketchip.amba.axi4.{AXI4Xbar, AXI4Delayer}
 import freechips.rocketchip.tilelink._
 import freechips.rocketchip.diplomacy.{AddressSet, LazyModule, LazyModuleImp}
 import top.DefaultConfig
 import chipsalliance.rocketchip.config.Parameters
+import device.AXI4MemorySlave
 
-class SimTop(implicit p: Parameters) extends LazyModule {
-
-  //lazy val config = new DefaultConfig(FPGAPlatform = false)
+class SimTop(implicit p: Parameters) extends Module {
+  val io = IO(new Bundle{
+    val logCtrl = new LogCtrlIO
+    val perfInfo = new PerfInfoIO
+    val uart = new UARTIO
+  })
   val l_soc = LazyModule(new NutShell())
-  
-  //val mem = LazyModule(new AXI4RAM(memByte = 128 * 1024 * 1024, useBlackBox = true))
-  val mem = LazyModule(new AXI4RAM(AddressSet(0x80000000L, 0x7ffffffL), beatBytes = 32))     //128MB
-  
-  val xbar = AXI4Xbar()
-  
-  xbar := TLToAXI4() :*= l_soc.dmemory_port
-  xbar := l_soc.imem.node
-  mem.node := AXI4Delayer(0) :=* xbar
-
-  lazy val module = new LazyModuleImp(this) {
+  val soc = Module(l_soc.module)
+  val l_simAXIMem = AXI4MemorySlave(
+    l_soc.memAXI4SlaveNode,
+    128 * 1024 * 1024,
+    useBlackBox = true,
+    dynamicLatency = false
+  )
+  //val simAXIMem = Module(l_simAXIMem.module)
+  //l_simAXIMem.io_axi4 <> soc.memory
     
-    val io = IO(new Bundle{
-      val logCtrl = new LogCtrlIO
-      val perfInfo = new PerfInfoIO
-      val uart = new UARTIO
-    })
 
-    val mmio = Module(new SimMMIO)
-    val soc = l_soc.module
 
-    soc.io.frontend <> mmio.io.dma
+  val mmio = Module(new SimMMIO)
+  //val soc = l_soc.module
 
-    mmio.io.rw <> soc.io.mmio
+  soc.io.frontend <> mmio.io.dma
+  val simAXIMem = Module(l_simAXIMem.module)
+  l_simAXIMem.io_axi4 <> soc.memory
 
-    soc.io.meip := mmio.io.meip
+  mmio.io.rw <> soc.io.mmio
 
-    val log_begin, log_end, log_level = WireInit(0.U(64.W))
-    log_begin := io.logCtrl.log_begin
-    log_end := io.logCtrl.log_end
-    log_level := io.logCtrl.log_level
+  soc.io.meip := mmio.io.meip
 
-    assert(log_begin <= log_end)
-    //BoringUtils.addSource((GTimer() >= log_begin) && (GTimer() < log_end), "DISPLAY_ENABLE")
+  val log_begin, log_end, log_level = WireInit(0.U(64.W))
+  log_begin := io.logCtrl.log_begin
+  log_end := io.logCtrl.log_end
+  log_level := io.logCtrl.log_level
 
-    // make BoringUtils not report boring exception when EnableDebug is set to false
-    val dummyWire = WireInit(false.B)
-    BoringUtils.addSink(dummyWire, "DISPLAY_ENABLE")
+  assert(log_begin <= log_end)
+  //BoringUtils.addSource((GTimer() >= log_begin) && (GTimer() < log_end), "DISPLAY_ENABLE")
 
-    io.uart <> mmio.io.uart
-  }  
+  // make BoringUtils not report boring exception when EnableDebug is set to false
+  val dummyWire = WireInit(false.B)
+  BoringUtils.addSink(dummyWire, "DISPLAY_ENABLE")
+
+  io.uart <> mmio.io.uart
+  
 }

@@ -56,13 +56,13 @@ class Release(edge: TLEdgeOut)(implicit val p: Parameters) extends DCacheModule 
   val release = edge.Release(
     fromSource = idRel, 
     toAddress = req.addr, 
-    lgSize = log2Ceil(LineSize).U, 
+    lgSize = log2Ceil(XLEN).U, 
     shrinkPermissions = release_shrink_param)._2
 
   val releaseData = edge.Release(
     fromSource = idRel, 
     toAddress = req.addr, 
-    lgSize = log2Ceil(LineSize).U, 
+    lgSize = log2Ceil(XLEN).U, 
     shrinkPermissions = release_shrink_param, 
     data = rData)._2
 

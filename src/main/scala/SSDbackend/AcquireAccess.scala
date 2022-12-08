@@ -121,13 +121,13 @@ sealed class AcquireAccess(edge: TLEdgeOut)(implicit val p: Parameters) extends 
   val acquireBlock = edge.AcquireBlock(
     fromSource = idAcquire, 
     toAddress = req.addr, 
-    lgSize = log2Ceil(LineSize).U, 
+    lgSize = log2Ceil(XLEN).U, 
     growPermissions = acParam)._2
 
   val acquirePerm = edge.AcquirePerm(
     fromSource = idAcquire, 
     toAddress = req.addr, 
-    lgSize = log2Ceil(LineSize).U, 
+    lgSize = log2Ceil(XLEN).U, 
     growPermissions = acParam)._2
 
   val isFullPut = genWmask(req.size) === req.wmask

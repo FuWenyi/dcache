@@ -27,7 +27,7 @@ import huancun.{HCCacheParamsKey, HuanCun}
 import freechips.rocketchip.amba.axi4._ 
 import freechips.rocketchip.tilelink._ 
 import chipsalliance.rocketchip.config.Parameters
-import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp}
+import freechips.rocketchip.diplomacy.{LazyModule, LazyModuleImp, MemoryDevice, AddressSet, InModuleBody, TransferSizes, RegionType}
 import utils._
 import huancun._
 import chipsalliance.rocketchip.config._
@@ -72,8 +72,38 @@ class NutShell()(implicit p: Parameters) extends LazyModule {
     )
   })))
   val imem = LazyModule(new SB2AXI4MasterNode(true))
-  val dmemory_port = TLIdentityNode()
-  dmemory_port := l2cache.node := nutcore.dcache.clientNode
+  //val dmemory_port = TLIdentityNode()
+  //dmemory_port := l2cache.node := nutcore.dcache.clientNode
+
+  //axi4ram slave node
+  val device = new MemoryDevice
+  val memRange = AddressSet(0x00000000L, 0xfffffffffL).subtract(AddressSet(0x0L, 0x7fffffffL))
+  val memAXI4SlaveNode = AXI4SlaveNode(Seq(
+    AXI4SlavePortParameters(
+      slaves = Seq(
+        AXI4SlaveParameters(
+          address = memRange,
+          regionType = RegionType.UNCACHED,
+          executable = true,
+          supportsRead = TransferSizes(1, 64),
+          supportsWrite = TransferSizes(1, 64),
+          interleavedId = Some(0),
+          resources = device.reg("mem")
+        )
+      ),
+      beatBytes = 32
+    )
+  ))
+
+  val xbar = AXI4Xbar()
+  xbar := AXI4UserYanker() := AXI4Deinterleaver(64) := TLToAXI4() :*= TLIdentityNode() := l2cache.node := nutcore.dcache.clientNode
+  xbar := imem.node
+  memAXI4SlaveNode :=* xbar
+  
+  /*val memory = InModuleBody {
+    memAXI4SlaveNode.makeIOs()
+  }*/
+
   lazy val module = new NutShellImp(this)
 }
 
@@ -86,6 +116,8 @@ class NutShellImp(outer: NutShell) extends LazyModuleImp(outer) with HasNutCoreP
     val ila = if (FPGAPlatform && EnableILA) Some(Output(new ILABundle)) else None
   })
 
+  //val memory = IO(outer.memory.cloneType)
+  val memory = outer.memAXI4SlaveNode.makeIOs()
   val nutcore = outer.nutcore.module
   val imem = outer.imem.module
 
