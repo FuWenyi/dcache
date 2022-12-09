@@ -211,6 +211,7 @@ object SimpleBus2AXI4Converter {
   }
 }
 
+//datawidth is 256
 class SB2AXI4MasterNode(isFromCache: Boolean)(implicit p: Parameters) extends LazyModule {
   val idBits = 2
   val node = AXI4MasterNode(
@@ -245,14 +246,13 @@ class SB2AXI4MasterNode(isFromCache: Boolean)(implicit p: Parameters) extends La
     w.data := mem.req.bits.wdata
     w.strb := mem.req.bits.wmask
 
-    def LineBeats = 8
+    def LineBeats = 2
     val wlast = WireInit(true.B)
     val rlast = WireInit(true.B)
     
     ar.id    := 0.U
     ar.len   := Mux(mem.req.bits.isBurst(), (LineBeats - 1).U, 0.U)
     //ar.size  := mem.req.bits.size
-    ar.size  := 8.U
     /*ar.burst := (if (isFromCache) AXI4Parameters.BURST_WRAP
                           else AXI4Parameters.BURST_INCR)*/
     ar.burst := AXI4Parameters.BURST_INCR
@@ -264,10 +264,11 @@ class SB2AXI4MasterNode(isFromCache: Boolean)(implicit p: Parameters) extends La
     wlast := w.last
     rlast := r.last
     
-
+    val Rcnt = Counter(4)
+    val len = RegInit(0.U)
     aw := ar
     mem.resp.bits.rdata := r.data
-    mem.resp.bits.cmd  := Mux(rlast, SimpleBusCmd.readLast, 0.U)
+    mem.resp.bits.cmd  := Mux(mem.resp.fire && len === 1.U && Rcnt.value === 3.U, SimpleBusCmd.readLast, 0.U)
 
     val wSend = Wire(Bool())
     val awAck = BoolStopWatch(axi.aw.fire, wSend)
@@ -280,9 +281,46 @@ class SB2AXI4MasterNode(isFromCache: Boolean)(implicit p: Parameters) extends La
     axi.w .valid := mem.isWrite() && !wAck
     mem.req.ready  := Mux(mem.req.bits.isWrite(), !wAck && axi.w.ready, axi.ar.ready)
 
-    axi.r.ready  := mem.resp.ready
+    val Ren = RegInit(false.B)
+    axi.r.ready  := mem.resp.ready && !Ren
     axi.b.ready  := mem.resp.ready
-    mem.resp.valid  := Mux(wen, axi.b.valid, axi.r.valid)
-  }
 
+    
+    mem.resp.valid  := Mux(wen, axi.b.valid, Mux(axi.r.fire, true.B, Ren))
+
+    val Rdata = Reg(UInt(256.W))
+    val s_idle :: s_r :: Nil = Enum(2)
+    val state = RegInit(0.U)
+    
+    switch (state) {
+      is (s_idle) {
+        when (axi.ar.fire) {
+          state := s_r
+        }
+      }
+      is (s_r) {
+        when (axi.r.fire) {
+          Rdata := r.data
+          Rcnt.value := 1.U
+          Ren := true.B
+          when (r.last) {
+            len := 1.U
+          }
+        }
+        when (len === 1.U && Rcnt.value === 3.U) {
+          state := s_idle
+          len := 0.U
+        }
+        when (Rcnt.value === 3.U) {
+          Ren := false.B
+        }
+        when (Ren) {
+          Rcnt.inc()
+        }
+        when (mem.resp.fire) {
+          mem.resp.bits.rdata := Mux(Rcnt.value === 0.U, r.data(63, 0), (Rdata >> (Rcnt.value << 6.U))(63, 0))
+        }
+      }
+    }
+  }
 }

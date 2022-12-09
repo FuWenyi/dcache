@@ -41,7 +41,7 @@ sealed class AcquireAccess(edge: TLEdgeOut)(implicit val p: Parameters) extends 
 
   //miss calculate acquire.param | newCoh
     //acquire block
-  val (_, acBParam, newBCoh) = (ClientMetadata.onReset).onAccess(req.cmd)
+  val (_, acBParam, _) = (ClientMetadata.onReset).onAccess(req.cmd)
     //acquire perm
   val (_, acPParam, newPCoh) = cohOld.onAccess(req.cmd)
 
@@ -49,6 +49,7 @@ sealed class AcquireAccess(edge: TLEdgeOut)(implicit val p: Parameters) extends 
 
   val isGrant = io.mem_grantAck.bits.opcode === TLMessages.Grant || io.mem_grantAck.bits.opcode === TLMessages.GrantData
 
+  val newBCoh = ((ClientMetadata.onReset).onGrant(req.cmd, io.mem_grantAck.bits.param)).asTypeOf(new ClientMetadata)
   val newCoh = Mux(hitTag, newPCoh, newBCoh)
   val metaWrValid = (state === s_grant || (state === s_grantD && grant_first)) && isGrant && io.mem_grantAck.fire
   val metaWriteBus = Wire(CacheMetaArrayWriteBus()).apply(

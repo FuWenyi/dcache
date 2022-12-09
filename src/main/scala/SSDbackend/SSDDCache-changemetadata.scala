@@ -170,7 +170,7 @@ sealed class DCacheStage1(implicit val p: Parameters) extends DCacheModule {
   io.metaReadBus.apply(valid = readBusValid, setIdx = getMetaIdx(io.in.bits.addr))
   io.tagReadBus.apply(valid = readBusValid, setIdx = getMetaIdx(io.in.bits.addr))
   for (w <- 0 until sramNum) {
-    io.dataReadBus(w).apply(valid = w.U === getbankIdx(io.in.bits.addr), setIdx = getDataIdx(io.in.bits.addr))
+    io.dataReadBus(w).apply(valid = readBusValid && (w.U === getbankIdx(io.in.bits.addr)), setIdx = getDataIdx(io.in.bits.addr))
   }
 
   //metaArray need to reset before Load
@@ -351,7 +351,10 @@ sealed class DCacheStage2(edge: TLEdgeOut)(implicit val p: Parameters) extends D
   io.out <> acquireAccess.io.resp
   io.out.valid := io.in.valid && (hit || (miss && acquireAccess.io.resp.valid && relOK)) 
   io.out.bits.rdata := Mux(hit, dataRead, acquireAccess.io.resp.bits.rdata)
-  io.in.ready := io.out.ready
+  
+  val acquireReady = Mux(miss, acquireAccess.io.req.ready, true.B)
+  val releaseReady = Mux(needRel, release.io.req.ready, true.B)
+  io.in.ready := io.out.ready && acquireReady && releaseReady
 
 }
 
