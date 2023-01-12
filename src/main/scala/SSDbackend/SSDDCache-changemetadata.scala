@@ -272,7 +272,7 @@ sealed class DCacheStage2(edge: TLEdgeOut)(implicit val p: Parameters) extends D
 
     //cmd write: write data to cache
   val bankHitVec = BankHitVec(req.addr)
-  val hitBank = Mux1H(bankHitVec, io.dataReadBus).resp.data
+  val hitBank = Mux1H(bankHitVec, io.dataReadResp)
   val dataRead = Mux1H(waymask, hitBank).data
   val dataMasked = MaskData(dataRead, req.wdata, wordMask)
   val dataHitWriteBus = Wire(Vec(sramNum, CacheDataArrayWriteBus()))
@@ -347,7 +347,11 @@ sealed class DCacheStage2(edge: TLEdgeOut)(implicit val p: Parameters) extends D
   when (release.io.release_ok) {isrelDone := true.B}
   when (io.out.fire) {isrelDone := false.B}
   val relOK = !needRel || (needRel && isrelDone)
-  
+
+  val isGrant = io.mem_grantReleaseAck.bits.opcode === TLMessages.Grant || io.mem_grantReleaseAck.bits.opcode === TLMessages.GrantData
+  val isRelAck = io.mem_grantReleaseAck.bits.opcode === TLMessages.ReleaseAck
+  io.mem_grantReleaseAck.ready := Mux(isGrant, acquireAccess.io.mem_grantAck.ready, Mux(isRelAck, release.io.mem_releaseAck.ready, false.B))
+
   io.out <> acquireAccess.io.resp
   io.out.valid := io.in.valid && (hit || (miss && acquireAccess.io.resp.valid && relOK)) 
   io.out.bits.rdata := Mux(hit, dataRead, acquireAccess.io.resp.bits.rdata)
@@ -356,6 +360,9 @@ sealed class DCacheStage2(edge: TLEdgeOut)(implicit val p: Parameters) extends D
   val releaseReady = Mux(needRel, release.io.req.ready, true.B)
   io.in.ready := io.out.ready && acquireReady && releaseReady
 
+  val cacheStall = WireInit(false.B)
+  cacheStall := miss
+  BoringUtils.addSource(cacheStall,"cacheStall")
 }
 
 class DCache()(implicit p: Parameters) extends LazyModule with HasNutCoreParameter with HasDCacheParameters with HasNutCoreParameters{

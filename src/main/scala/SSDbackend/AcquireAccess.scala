@@ -64,7 +64,7 @@ sealed class AcquireAccess(edge: TLEdgeOut)(implicit val p: Parameters) extends 
   val wordMask = Mux(req.isWrite(), MaskExpand(req.wmask), 0.U(DataBits.W))
   val dataRefill = Wire(Vec(sramNum, UInt(XLEN.W)))
   for (w <- 0 until sramNum) {
-    dataRefill(w) := MaskData(io.mem_grantAck.bits.data((w + 1) << XLEN, w << XLEN), req.wdata, Mux(addr.wordIndex === grant_count && addr.bankIndex === w.U, wordMask, 0.U(DataBits.W)))
+    dataRefill(w) := MaskData(io.mem_grantAck.bits.data(((w + 1) * XLEN) - 1, w * XLEN), req.wdata, Mux(addr.wordIndex === grant_count && addr.bankIndex === w.U, wordMask, 0.U(DataBits.W)))
   }
   //val dataRefill = MaskData(io.mem_grantAck.bits.data, req.wdata, Mux(addr.wordIndex === grant_count, 0.U(DataBits.W), wordMask))
   val wdata = dataRefill.map{Mux(state === s_grant, req.wdata, _)}
@@ -122,13 +122,13 @@ sealed class AcquireAccess(edge: TLEdgeOut)(implicit val p: Parameters) extends 
   val acquireBlock = edge.AcquireBlock(
     fromSource = idAcquire, 
     toAddress = req.addr, 
-    lgSize = log2Ceil(XLEN).U, 
+    lgSize = log2Ceil(LineBeats * sramNum).U, 
     growPermissions = acParam)._2
 
   val acquirePerm = edge.AcquirePerm(
     fromSource = idAcquire, 
     toAddress = req.addr, 
-    lgSize = log2Ceil(XLEN).U, 
+    lgSize = log2Ceil(LineBeats * sramNum).U, 
     growPermissions = acParam)._2
 
   val isFullPut = genWmask(req.size) === req.wmask
@@ -225,7 +225,7 @@ sealed class AcquireAccess(edge: TLEdgeOut)(implicit val p: Parameters) extends 
 
   val dataRead = Wire(Vec(sramNum, UInt(XLEN.W)))
   for (w <- 0 until sramNum) {
-    dataRead(w) := io.mem_grantAck.bits.data((w + 1) << XLEN, w << XLEN)
+    dataRead(w) := io.mem_grantAck.bits.data(((w + 1) * XLEN) - 1, w * XLEN)
   }
   val bankHitVec = BankHitVec(addr.asUInt)
   val rData = RegEnable(Mux1H(bankHitVec, dataRead), isGrant && io.mem_grantAck.fire && (state === s_accessAD || (state === s_grantD && addr.wordIndex === grant_count)))
