@@ -96,6 +96,7 @@ object AddressSpace extends HasNutCoreParameter {
 class NutCore()(implicit p: Parameters) extends LazyModule with HasNutCoreParameter with HasNutCoreConst with HasExceptionNO with HasBackendConst with HasNutCoreParameters{
 
   val dcache = LazyModule(new DCache())
+  val icache = LazyModule(new ICache())
   //Debug() {printf("%d", FPGAPlatform)}
   lazy val module = new NutCoreImp(this)
 }
@@ -103,9 +104,10 @@ class NutCore()(implicit p: Parameters) extends LazyModule with HasNutCoreParame
 class NutCoreImp(outer: NutCore) extends LazyModuleImp(outer) with HasNutCoreParameter with HasNutCoreConst with HasExceptionNO with HasBackendConst{
   
   val dcache = outer.dcache.module
+  val icache = outer.icache.module
 
   class NutCoreIO extends Bundle {
-    val imem = new SimpleBusC
+    //val imem = new SimpleBusC
     //val dmem = new SimpleBusC
     val mmio = new SimpleBusUC
     val frontend = Flipped(new SimpleBusUC())
@@ -133,10 +135,15 @@ class NutCoreImp(outer: NutCore) extends LazyModuleImp(outer) with HasNutCorePar
 //  PipelineVector2Connect(new DecodeIO, frontend.io.out(2), frontend.io.out(3), SSDbackend.io.in(2), SSDbackend.io.in(3), frontend.io.flushVec(1), 16)
   for(i <- 0 to 3){frontend.io.out(i) <> SSDbackend.io.in(i)}
   val mmioXbar = Module(new SimpleBusCrossbarNto1(1))
+  mmioXbar.io.in(0) := DontCare
   val s2NotReady = WireInit(false.B)
-  io.imem <> SSDCache(in = frontend.io.imem, mmio = mmioXbar.io.in(0), flush = (frontend.io.flushVec(0) | frontend.io.bpFlush))(SSDCacheConfig(ro = true, name = "icache", userBits = ICacheUserBundleWidth))
+  //io.imem <> SSDCache(in = frontend.io.imem, mmio = mmioXbar.io.in(0), flush = (frontend.io.flushVec(0) | frontend.io.bpFlush))(SSDCacheConfig(ro = true, name = "icache", userBits = ICacheUserBundleWidth))
   //io.dmem <> SSDCache(in = SSDbackend.io.dmem, mmio = mmioXbar.io.in(1), flush = false.B)(SSDCacheConfig(ro = true, name = "dcache"))
   
+  icache.io.in <> frontend.io.imem
+  icache.io.flush := frontend.io.flushVec(0) | frontend.io.bpFlush
+
+
   dcache.io.in <> SSDbackend.io.dmem
   //dcache.io.mmio <> mmioXbar.io.in(1)
   dcache.io.flush := false.B

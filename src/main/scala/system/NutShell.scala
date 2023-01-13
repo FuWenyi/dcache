@@ -71,7 +71,7 @@ class NutShell()(implicit p: Parameters) extends LazyModule {
       echoField = Seq()
     )
   })))
-  val imem = LazyModule(new SB2AXI4MasterNode(true))
+  //val imem = LazyModule(new SB2AXI4MasterNode(true))
   //val dmemory_port = TLIdentityNode()
   //dmemory_port := l2cache.node := nutcore.dcache.clientNode
 
@@ -95,11 +95,14 @@ class NutShell()(implicit p: Parameters) extends LazyModule {
     )
   ))
 
-  val xbar = AXI4Xbar()
+  /*val xbar = AXI4Xbar()
   xbar := AXI4UserYanker() := AXI4Deinterleaver(64) := TLToAXI4() :*= TLIdentityNode() := l2cache.node := nutcore.dcache.clientNode
   xbar := imem.node
-  memAXI4SlaveNode :=* xbar
-  
+  memAXI4SlaveNode :=* xbar*/
+  val tlBus = TLXbar()
+  tlBus := nutcore.dcache.clientNode
+  tlBus := nutcore.icache.clientNode
+  memAXI4SlaveNode := AXI4UserYanker() := AXI4Deinterleaver(64) := TLToAXI4() :*= TLIdentityNode() := l2cache.node :=* tlBus
   /*val memory = InModuleBody {
     memAXI4SlaveNode.makeIOs()
   }*/
@@ -119,24 +122,24 @@ class NutShellImp(outer: NutShell) extends LazyModuleImp(outer) with HasNutCoreP
   //val memory = IO(outer.memory.cloneType)
   val memory = outer.memAXI4SlaveNode.makeIOs()
   val nutcore = outer.nutcore.module
-  val imem = outer.imem.module
+  //val imem = outer.imem.module
 
   val axi2sb = Module(new AXI42SimpleBusConverter())
   axi2sb.io.in <> io.frontend
   nutcore.io.frontend <> axi2sb.io.out
   
-  val memMapRegionBits = Settings.getInt("MemMapRegionBits")
+  /*val memMapRegionBits = Settings.getInt("MemMapRegionBits")
   val memMapBase = Settings.getLong("MemMapBase")
-  val memAddrMap = Module(new SimpleBusAddressMapper((memMapRegionBits, memMapBase)))
+  val memAddrMap = Module(new SimpleBusAddressMapper((memMapRegionBits, memMapBase)))*/
   //memAddrMap.io.in <> mem
-  memAddrMap.io.in <> nutcore.io.imem.mem
+  //memAddrMap.io.in <> nutcore.io.imem.mem
   
   //io.mem <> memAddrMap.io.out.toAXI4(true)
-  imem.io.in <> memAddrMap.io.out
+  //imem.io.in <> memAddrMap.io.out
 
-  nutcore.io.imem.coh.resp.ready := true.B
+  /*nutcore.io.imem.coh.resp.ready := true.B
   nutcore.io.imem.coh.req.valid := false.B
-  nutcore.io.imem.coh.req.bits := DontCare
+  nutcore.io.imem.coh.req.bits := DontCare*/
 
   val addrSpace = List(
     (Settings.getLong("MMIOBase"), Settings.getLong("MMIOSize")), // external devices
