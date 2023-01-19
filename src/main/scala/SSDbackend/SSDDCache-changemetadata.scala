@@ -394,16 +394,16 @@ class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheIO wit
   val s2 = Module(new DCacheStage2(edge))
 
   //core modules
-  //val probe = Module(new Probe(edge))
+  val probe = Module(new Probe(edge))
 
   //meta 
-  val tagArray = Module(new MetaSRAMTemplateWithArbiter(nRead = 1, new DTagBundle, set = Sets, way = Ways, shouldReset = true))
-  val metaArray = Module(new MetaSRAMTemplateWithArbiter(nRead = 1, new DMetaBundle, set = Sets, way = Ways, shouldReset = true))
+  val tagArray = Module(new MetaSRAMTemplateWithArbiter(nRead = 2, new DTagBundle, set = Sets, way = Ways, shouldReset = true))
+  val metaArray = Module(new MetaSRAMTemplateWithArbiter(nRead = 2, new DMetaBundle, set = Sets, way = Ways, shouldReset = true))
   //val dataArray = Module(new DataSRAMTemplateWithArbiter(nRead = 3, new DDataBundle, set = Sets * LineBeats, way = Ways))
 
   val dataArray = Array.fill(sramNum) {
     Module(new DataSRAMTemplateWithArbiter(
-      nRead = 2,
+      nRead = 3,
       new DDataBundle,
       set = Sets * LineBeats / sramNum,
       way = Ways
@@ -425,8 +425,8 @@ class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheIO wit
   s2.io.mem_finish <> bus.e 
 
   //DontCare <> bus.b  
-  //probe.mem_probe <> bus.b
-  //probe.mem_probeAck <> bus.c
+  probe.io.mem_probe <> bus.b
+  probe.io.mem_probeAck <> bus.c
   
   //val channelCArb = Module(new channelCArb(edge))
   //channelCArb.io.in(0) <> probe.mem_probeAck
@@ -439,23 +439,26 @@ class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheIO wit
   //io.mmio <> s2.io.mmio
 
   metaArray.io.r(0) <> s1.io.metaReadBus
-  //metaArray.io.r(1) <> probe.io.metaReadBus
+  metaArray.io.r(1) <> probe.io.metaReadBus
   for (w <- 0 until sramNum) {
     dataArray(w).io.r(0) <> s1.io.dataReadBus(w)
   }
   for (w <- 0 until sramNum) {
     dataArray(w).io.r(1) <> s2.io.dataReadBus(w)
   }
+  for (w <- 0 until sramNum) {
+    dataArray(w).io.r(2) <> probe.io.dataReadBus(w)
+  }
   //dataArray.io.r(2) <> probe.io.dataReadBus
   tagArray.io.r(0) <> s1.io.tagReadBus
-  //tagArray.io.r(1) <> probe.io.tagReadBus
+  tagArray.io.r(1) <> probe.io.tagReadBus
 
-  //val metaWriteArb = Module(new Arbiter(CacheMetaArrayWriteBus().req.bits, 2))
+  val metaWriteArb = Module(new Arbiter(CacheMetaArrayWriteBus().req.bits, 2))
   //val dataWriteArb = Module(new Arbiter(CacheDataArrayWriteBus().req.bits, 2))
-  //metaWriteArb.io.in(0) <> s2.io.metaWriteBus
-  //metaWriteArb.io.in(1) <> probe.io.metaWriteBus
-  //metaArray.io.w <> metaWriteArb.io.out
-  metaArray.io.w <> s2.io.metaWriteBus
+  metaWriteArb.io.in(0) <> s2.io.metaWriteBus.req
+  metaWriteArb.io.in(1) <> probe.io.metaWriteBus.req
+  metaArray.io.w.req <> metaWriteArb.io.out
+  //metaArray.io.w <> s2.io.metaWriteBus
   //dataWriteArb.io.in(0) <> probe.io.dataWriteBus
   //dataWriteArb.io.in(1) <> s2.io.dataWriteBus
   //dataArray.io.w <> dataWriteArb.io.out

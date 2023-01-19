@@ -119,15 +119,17 @@ sealed class AcquireAccess(edge: TLEdgeOut)(implicit val p: Parameters) extends 
     toAddress = req.addr,
     lgSize = req.size)._2*/
 
+  val a_address = req.addr & ("hfffffffffffffffff".U << log2Ceil(LineSize).U)
+
   val acquireBlock = edge.AcquireBlock(
     fromSource = idAcquire, 
-    toAddress = req.addr, 
+    toAddress = a_address, 
     lgSize = log2Ceil(LineSize).U, 
     growPermissions = acParam)._2
 
   val acquirePerm = edge.AcquirePerm(
     fromSource = idAcquire, 
-    toAddress = req.addr, 
+    toAddress = a_address, 
     lgSize = log2Ceil(LineSize).U, 
     growPermissions = acParam)._2
 
@@ -248,6 +250,7 @@ sealed class IAcquireAccess(edge: TLEdgeOut)(implicit val p: Parameters) extends
     val metaWriteBus = CacheMetaArrayWriteBus()
     val dataWriteBus = Vec(sramNum, CacheDataArrayWriteBus())
     val tagWriteBus = CacheTagArrayWriteBus()
+    val needFlush = Input(Bool())
   })    
 
   //condition machine: mmio s_get | s_putFullData | s_putPartialData | s_accessAckData | s_AccessAck    s_wait_resp与cpu交互
@@ -342,15 +345,17 @@ sealed class IAcquireAccess(edge: TLEdgeOut)(implicit val p: Parameters) extends
     toAddress = req.addr,
     lgSize = req.size)._2*/
 
+  val a_address = req.addr & ("hfffffffffffffffff".U << log2Ceil(LineSize).U)
+  
   val acquireBlock = edge.AcquireBlock(
     fromSource = idAcquire, 
-    toAddress = req.addr, 
+    toAddress = a_address, 
     lgSize = log2Ceil(LineSize).U, 
     growPermissions = acParam)._2
 
   val acquirePerm = edge.AcquirePerm(
     fromSource = idAcquire, 
-    toAddress = req.addr, 
+    toAddress = a_address, 
     lgSize = log2Ceil(LineSize).U, 
     growPermissions = acParam)._2
 
@@ -438,7 +443,7 @@ sealed class IAcquireAccess(edge: TLEdgeOut)(implicit val p: Parameters) extends
       }      
     }
     is (s_waitResp) {
-      when (io.resp.fire) {
+      when (io.resp.fire || io.needFlush) {
         state := s_idle
       }      
     }

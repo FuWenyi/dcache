@@ -248,6 +248,7 @@ sealed class ICacheStage2(edge: TLEdgeOut)(implicit val p: Parameters) extends I
 
   //mmio | miss
     //core modules: acquireAccess
+  val needFlush = RegInit(false.B)
   val acquireAccess = Module(new IAcquireAccess(edge))
   acquireAccess.io.mem_getPutAcquire <> io.mem_getPutAcquire
   acquireAccess.io.mem_grantAck <> io.mem_grantReleaseAck
@@ -260,6 +261,7 @@ sealed class ICacheStage2(edge: TLEdgeOut)(implicit val p: Parameters) extends I
   acquireAccess.io.hitTag := hitTag
   acquireAccess.io.cohOld := coh
   acquireAccess.io.resp.ready := io.out.ready
+  acquireAccess.io.needFlush := needFlush
 
   //val metaWriteBusAcquire = acquireAccess.io.metaWriteBus.req
   //val dataWriteBusAcquire = acquireAccess.io.dataWriteBus.req
@@ -309,15 +311,23 @@ sealed class ICacheStage2(edge: TLEdgeOut)(implicit val p: Parameters) extends I
 
   val isGrant = io.mem_grantReleaseAck.bits.opcode === TLMessages.Grant || io.mem_grantReleaseAck.bits.opcode === TLMessages.GrantData
   val isRelAck = io.mem_grantReleaseAck.bits.opcode === TLMessages.ReleaseAck
-  io.mem_grantReleaseAck.ready := Mux(isGrant, acquireAccess.io.mem_grantAck.ready, Mux(isRelAck, release.io.mem_releaseAck.ready, false.B))
+  //io.mem_grantReleaseAck.ready := Mux(isGrant, acquireAccess.io.mem_grantAck.ready, Mux(isRelAck, release.io.mem_releaseAck.ready, false.B))
+  io.mem_grantReleaseAck.ready := acquireAccess.io.mem_grantAck.ready || release.io.mem_releaseAck.ready
 
   io.out <> acquireAccess.io.resp
-  io.out.valid := io.in.valid && (hit || (miss && acquireAccess.io.resp.valid && relOK)) 
+  io.out.valid := io.in.valid && (hit || (miss && acquireAccess.io.resp.valid && relOK)) && !needFlush
   io.out.bits.rdata := Mux(hit, dataRead, acquireAccess.io.resp.bits.rdata)
-  
-  val acquireReady = Mux(miss, acquireAccess.io.req.ready, true.B)
-  val releaseReady = Mux(needRel, release.io.req.ready, true.B)
-  io.in.ready := io.out.ready && acquireReady && releaseReady && !miss
+
+  val acquireReady = Mux(miss || needFlush, acquireAccess.io.req.ready, true.B)
+  val releaseReady = Mux(needRel || needFlush, release.io.req.ready, true.B)
+
+  when(io.flush && miss) {
+    needFlush := true.B
+  }
+  when(needFlush && acquireReady && releaseReady) {
+    needFlush := false.B
+  }
+  io.in.ready := io.out.ready && acquireReady && releaseReady && !miss && !needFlush
 }
 
 class ICache()(implicit p: Parameters) extends LazyModule with HasNutCoreParameter with HasICacheParameters with HasNutCoreParameters{
@@ -399,6 +409,7 @@ class ICacheImp(outer: ICache) extends LazyModuleImp(outer) with HasICacheIO wit
   //channelCArb.io.in(1) <> s2.io.mem_release
 
   PipelineConnect(s1.io.out, s2.io.in, s2.io.out.fire, io.flush)
+  //PipelineConnect(s1.io.out, s2.io.in, s2.io.out.fire, false.B)
 
   io.in.resp <> s2.io.out
   s2.io.flush := io.flush
